@@ -1,0 +1,29 @@
+# Contributing to waft
+
+Thank you for your interest in contributing to `waft`!
+
+## Philosophy
+`waft` values correctness over cleverness, clarity over abstraction, and minimal surface area over features. Before opening a pull request, please check the "not in scope" list in `docs/plan.md`. If your proposed change is on that list, open a discussion issue first.
+
+## Quick Start
+1. Clone the repository.
+2. Run `cargo check` or `cargo build` to build the binary and automatically configure the local Git hooks path to `.githooks`.
+3. Run tests:
+   ```bash
+   cargo test
+   ```
+4. Run Clippy:
+   ```bash
+   cargo clippy --all-targets --all-features -- -D warnings
+   ```
+
+## Git Hook Automation
+To maintain high quality, we enforce pre-commit checks:
+- The `build.rs` script automatically runs `git config --local core.hooksPath .githooks` on build.
+- This ensures that `cargo fmt` and `cargo clippy` run before every commit locally.
+
+## Pull Requests
+All pull requests must:
+1. Pass all checks in CI (Linux, macOS, Windows).
+2. Follow Conventional Commits format (e.g. `feat(transfer): add zero-copy path for Linux`).
+3. Include tests verifying the change.

@@ -1,0 +1,1 @@
+// Clipboard synchronization logic.

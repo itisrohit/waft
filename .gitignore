@@ -1,0 +1,25 @@
+# Cargo / Rust
+/target
+Cargo.lock.bak
+**/*.rs.bk
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+*.log
+/scripts/*.tmp
+/scripts/*.log

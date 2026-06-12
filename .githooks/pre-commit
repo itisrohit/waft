@@ -1,0 +1,19 @@
+#!/bin/sh
+# Portable pre-commit hook to check formatting and clippy warnings before committing.
+
+echo "=== Running pre-commit checks ==="
+
+# Check formatting
+cargo fmt --all -- --check || {
+    echo "❌ Formatting check failed. Please run 'cargo fmt --all' to fix formatting."
+    exit 1
+}
+
+# Run clippy lints
+cargo clippy --all-targets --all-features -- -D warnings || {
+    echo "❌ Clippy checks failed. Please fix warnings before committing."
+    exit 1
+}
+
+echo "✅ All checks passed! Proceeding with commit."
+exit 0
