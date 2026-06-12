@@ -36,8 +36,3 @@ cargo audit
 cargo deny check
 ```
 
-### Branch Protection (One-time Setup)
-```bash
-# Set up main branch protection rules on GitHub (requires gh CLI logged in)
-./scripts/setup_github_protection.sh
-```
