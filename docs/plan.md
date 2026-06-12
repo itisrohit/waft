@@ -714,37 +714,8 @@ jobs:
 - **`deny.toml`**: Managed via `cargo-deny`, enforcing MIT/Apache-2.0 licenses, avoiding duplicate dependency versions, and validating crate sources.
 - **`build.rs`**: Automatically configures the local Git repository's `core.hooksPath` to point to `.githooks/` whenever any Cargo commands (`build`, `check`, `test`) are executed, ensuring git pre-commit checks run transparently for all developers without manual configuration steps.
 
-
-```yaml
-# .github/workflows/release.yml
-name: Release
-on:
-  push:
-    tags: ['v*']
-
-jobs:
-  release:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact: waft-linux-x86_64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact: waft-macos-x86_64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact: waft-windows-x86_64.exe
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release --target ${{ matrix.target }}
-      - uses: softprops/action-gh-release@v1
-        with:
-          files: target/${{ matrix.target }}/release/waft*
-```
+- **`codeql.yml`**: Triggers weekly and on push/PR, compiling the codebase and performing static analysis (SAST) to detect security vulnerabilities (e.g. data leakages, unsafe FFI, path injection).
+- **`dependabot.yml`**: Scans weekly to find outdated or vulnerable Cargo dependencies and GitHub Actions, automatically creating pull requests to keep dependencies safe.
 
 ---
 
