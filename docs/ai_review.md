@@ -11,7 +11,7 @@ Relying entirely on a raw Large Language Model (LLM) to perform security scannin
 **Our Approach:**
 1. **Deterministic Scan First**: Use high-fidelity local static security analysis and linter engines (`semgrep`, `cargo-audit`, `clippy`) to find exact security flaws, patterns, and warnings.
 2. **Generative Synthesis Second**: Feed the tool diagnostics and AST-sliced surrounding code to the LLM. The LLM's job is to explain the vulnerability, weed out false positives, and output a clean, ready-to-apply diff patch.
-3. **Local & Free**: Run entirely on a developer's machine using local inference models (e.g., Ollama running `qwen2.5-coder:7b`) or free cloud-tier APIs (e.g., Gemini 2.0 Flash) with prompt caching.
+3. **Zero Setup & Client-Native**: Leverage the existing LLM sessions and tool suites of the developer's active AI client (Claude Code CLI, OpenCode CLI, Codex CLI, or Antigravity IDE) so no API keys, local LLM servers (like Ollama), or complex pipelines need separate provisioning.
 
 ---
 
@@ -109,20 +109,37 @@ Determine:
 1. If the warning is a false positive under the current implementation context.
 2. How to fix it safely without breaking existing APIs or logic.
 
-Output structure:
-- Verdict: [Real Issue / False Positive]
-- Explanation: [Short, clear explanation of why it matters]
-- Unified Diff Patch: [The exact git diff patch to apply]
-```
+## 4. AI Client Unified Command Configuration
 
-### Local vs. Cloud LLM Configuration
-* **Ollama (Default Local)**: Runs `qwen2.5-coder:7b` (Q4_K_M quantization). Excellent local performance, zero cost, and code security since files never leave the machine.
-* **Gemini Flash (Default Cloud)**: Runs via the official Google Developer API. Leverages prompt caching on repeated system/context inputs, providing ~500ms response times.
+Rather than creating separate configuration folders for each agent client (`.claude/`, `.opencode/`, `.codex/`, `.gemini/`), the `/review` command is built under the emerging open standard directory structure:
+
+* **File Location**: `.agents/skills/review/SKILL.md`
+* **Trigger Command**: `/review`
+
+OpenCode CLI, Claude Code CLI, Codex CLI, and Antigravity IDE natively look for and execute skills in this directory.
+
+### 4.1 Skill File Structure
+The file contains the YAML frontmatter mapping to all clients, followed by standard instructions:
+
+```yaml
+---
+name: review
+description: "Run local security and code quality checks using clippy, semgrep, and git diff"
+allowed-tools:
+  - run_command
+  - view_file
+  - replace_file_content
+---
+
+You are a senior security engineer and compiler expert. When the user runs the `/review` command, perform a structured, high-fidelity security and code quality review of their local changes.
+
+[Workflow Instructions...]
+```
 
 ---
 
 ## 5. Security & Isolation
 
-For security plugins or custom user lint scripts running locally:
-* All execution of custom, unverified scripts (like dynamic rules) must occur inside restricted processes.
-* Standard scans (`semgrep`, `cargo-audit`, `clippy`) run under standard user permissions directly in the local repository directory.
+Security scans and command executions occur directly in the local repository environment:
+* Static analysis tools (`semgrep`, `cargo-audit`, `clippy`) execute locally under standard user permissions.
+* The AI client handles isolation and sandboxing of command execution according to its own security profile.
