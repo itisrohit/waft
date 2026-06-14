@@ -120,15 +120,7 @@ struct TransferHeader {
     tier: TrustTier,
 }
 
-/// Reads the protocol header, verifies the signature, and validates the trust tier.
-async fn read_and_verify_header(
-    socket: &mut TcpStream,
-    trust_store: &TrustStore,
-) -> Result<TransferHeader, WaftError> {
-    // 1. Read the 64-byte fixed metadata block
-    let header_bytes = read_exact_with_timeout::<64>(socket).await?;
-
-    // Parse fixed fields
+fn parse_fixed_header(header_bytes: &[u8; 64]) -> Result<(usize, u64, [u8; 32]), WaftError> {
     let magic = &header_bytes[0..2];
     if magic != [0xFA, 0x57] {
         return Err(WaftError::InvalidHeader(format!(
@@ -152,16 +144,33 @@ async fn read_and_verify_header(
     let mut expected_hash = [0u8; 32];
     expected_hash.copy_from_slice(&header_bytes[14..46]);
 
+    Ok((name_len, file_size, expected_hash))
+}
+
+fn sanitize_filename(raw_name: &str) -> Result<PathBuf, WaftError> {
+    Path::new(raw_name)
+        .file_name()
+        .map(PathBuf::from)
+        .ok_or_else(|| WaftError::InvalidHeader("Filename cannot be empty or invalid".into()))
+}
+
+/// Reads the protocol header, verifies the signature, and validates the trust tier.
+async fn read_and_verify_header(
+    socket: &mut TcpStream,
+    trust_store: &TrustStore,
+) -> Result<TransferHeader, WaftError> {
+    // 1. Read the 64-byte fixed metadata block
+    let header_bytes = read_exact_with_timeout::<64>(socket).await?;
+
+    let (name_len, file_size, expected_hash) = parse_fixed_header(&header_bytes)?;
+
     // 2. Read variable-length filename string
     let name_bytes = read_exact_vec_with_timeout(socket, name_len).await?;
     let raw_name = String::from_utf8(name_bytes)
         .map_err(|e| WaftError::InvalidHeader(format!("Filename is not valid UTF-8: {e}")))?;
 
     // Securely resolve filename to prevent path traversal
-    let filename = Path::new(&raw_name)
-        .file_name()
-        .map(PathBuf::from)
-        .ok_or_else(|| WaftError::InvalidHeader("Filename cannot be empty or invalid".into()))?;
+    let filename = sanitize_filename(&raw_name)?;
 
     // 3. Read sender's public key (32 bytes)
     let pubkey_bytes = read_exact_with_timeout::<32>(socket).await?;
@@ -205,6 +214,79 @@ async fn read_and_verify_header(
         fingerprint,
         tier,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_fixed_header, sanitize_filename};
+    use crate::error::WaftError;
+    use std::path::PathBuf;
+
+    fn valid_header() -> [u8; 64] {
+        let mut header = [0u8; 64];
+        header[0..2].copy_from_slice(&[0xFA, 0x57]);
+        header[2] = 1;
+        header[4..6].copy_from_slice(&12u16.to_be_bytes());
+        header[6..14].copy_from_slice(&1024u64.to_be_bytes());
+        header[14..46].copy_from_slice(&[0xAB; 32]);
+        header
+    }
+
+    #[test]
+    fn parse_fixed_header_accepts_valid_header() -> Result<(), WaftError> {
+        let (name_len, file_size, expected_hash) = parse_fixed_header(&valid_header())?;
+        assert_eq!(name_len, 12);
+        assert_eq!(file_size, 1024);
+        assert_eq!(expected_hash, [0xAB; 32]);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_fixed_header_rejects_invalid_magic() -> Result<(), String> {
+        let mut header = valid_header();
+        header[0..2].copy_from_slice(&[0x00, 0x00]);
+
+        let Some(error) = parse_fixed_header(&header).err() else {
+            return Err("invalid magic must fail".into());
+        };
+        match error {
+            WaftError::InvalidHeader(message) => {
+                assert!(message.contains("Invalid magic bytes"));
+                Ok(())
+            }
+            other => Err(format!("unexpected error: {other}")),
+        }
+    }
+
+    #[test]
+    fn parse_fixed_header_rejects_invalid_version() -> Result<(), String> {
+        let mut header = valid_header();
+        header[2] = 2;
+
+        let Some(error) = parse_fixed_header(&header).err() else {
+            return Err("invalid version must fail".into());
+        };
+        match error {
+            WaftError::InvalidHeader(message) => {
+                assert!(message.contains("Unsupported protocol version"));
+                Ok(())
+            }
+            other => Err(format!("unexpected error: {other}")),
+        }
+    }
+
+    #[test]
+    fn sanitize_filename_strips_directories() -> Result<(), WaftError> {
+        assert_eq!(
+            sanitize_filename("nested/file.txt")?,
+            PathBuf::from("file.txt")
+        );
+        assert_eq!(
+            sanitize_filename("../escape.txt")?,
+            PathBuf::from("escape.txt")
+        );
+        Ok(())
+    }
 }
 
 /// Handles a single incoming TCP transfer connection.

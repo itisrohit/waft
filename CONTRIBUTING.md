@@ -10,11 +10,19 @@ Thank you for your interest in contributing to `waft`!
 2. Run `cargo check` or `cargo build` to build the binary and automatically configure the local Git hooks path to `.githooks`.
 3. Run tests:
    ```bash
-   cargo test
+   cargo test --all-features
+   ```
+   For the multicast discovery smoke test on a machine that supports multicast:
+   ```bash
+   cargo test --all-features --test test_discovery_multicast -- --ignored
    ```
 4. Run Clippy:
    ```bash
    cargo clippy --all-targets --all-features -- -D warnings
+   ```
+5. Run formatting checks:
+   ```bash
+   cargo fmt --all --check
    ```
 
 ## Git Hook Automation

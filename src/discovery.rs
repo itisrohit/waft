@@ -61,6 +61,48 @@ pub struct DiscoveredPeer {
     pub last_seen: Instant,
 }
 
+/// Parses a received announcement payload into a discovered peer record.
+///
+/// Invalid payloads and self-announcements are ignored by returning `None`.
+#[must_use]
+pub fn parse_announcement(
+    payload: &[u8],
+    src_addr: SocketAddr,
+    my_fingerprint: &str,
+) -> Option<DiscoveredPeer> {
+    let announcement = std::str::from_utf8(payload)
+        .ok()
+        .and_then(|s| toml::from_str::<PeerAnnouncement>(s).ok())?;
+
+    if announcement.port == 0 {
+        return None;
+    }
+    if announcement.fingerprint.len() != 64
+        || !announcement
+            .fingerprint
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    if announcement.name.is_empty() || announcement.name.len() > 63 {
+        return None;
+    }
+    if announcement.fingerprint == my_fingerprint {
+        return None;
+    }
+
+    let mut tcp_addr = src_addr;
+    tcp_addr.set_port(announcement.port);
+
+    Some(DiscoveredPeer {
+        name: announcement.name,
+        fingerprint: announcement.fingerprint,
+        addr: tcp_addr,
+        last_seen: Instant::now(),
+    })
+}
+
 /// Collection mapping peer fingerprints to their discovered details.
 #[derive(Debug, Default)]
 pub struct PeerMap {
@@ -229,48 +271,22 @@ pub async fn start_listener(
             res = socket.recv_from(&mut buf) => {
                 match res {
                     Ok((len, src_addr)) => {
-                        let parsed = std::str::from_utf8(&buf[..len])
-                            .ok()
-                            .and_then(|s| toml::from_str::<PeerAnnouncement>(s).ok());
-
-                        if let Some(announcement) = parsed {
-                            // Validate announcement payload fields to handle edge cases safely
-                            if announcement.port == 0 {
-                                continue;
-                            }
-                            if announcement.fingerprint.len() != 64
-                                || !announcement.fingerprint.chars().all(|c| c.is_ascii_hexdigit())
-                            {
-                                continue;
-                            }
-                            if announcement.name.is_empty() || announcement.name.len() > 63 {
-                                continue;
-                            }
-
-                            // Ignore self-announcements
-                            if announcement.fingerprint == my_fingerprint {
-                                continue;
-                            }
-
-                            let mut tcp_addr = src_addr;
-                            tcp_addr.set_port(announcement.port);
+                        if let Some(discovered) =
+                            parse_announcement(&buf[..len], src_addr, &my_fingerprint)
+                        {
+                            let fingerprint = discovered.fingerprint.clone();
+                            let name = discovered.name.clone();
+                            let tcp_addr = discovered.addr;
 
                             // Lock optimization: check with a read lock first to throttle writes
                             let should_update = {
                                 let map = peers.read().await;
-                                map.should_update(&announcement.fingerprint, &announcement.name, tcp_addr, throttle_dur)
+                                map.should_update(&fingerprint, &name, tcp_addr, throttle_dur)
                             };
 
                             if should_update {
-                                let discovered = DiscoveredPeer {
-                                    name: announcement.name,
-                                    fingerprint: announcement.fingerprint.clone(),
-                                    addr: tcp_addr,
-                                    last_seen: Instant::now(),
-                                };
-
                                 let mut map = peers.write().await;
-                                map.insert(announcement.fingerprint, discovered);
+                                map.insert(fingerprint, discovered);
                             }
                         }
                     }

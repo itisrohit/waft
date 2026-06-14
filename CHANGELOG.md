@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `discovery.rs` module for UDP multicast peer presence discovery and mapping.
 - `error.rs` module for custom error types representing core system and I/O states.
 - `trust.rs` module implementing `TrustTier` configurations and thread-safe file-backed `TrustStore`.
-- Integration tests in `tests/test_discovery.rs` verifying peer announcement, timeout, and self-discovery filtering.
+- Deterministic discovery tests in `tests/test_discovery.rs` covering announcement parsing, invalid/self-announcement rejection, throttling, and peer expiry cleanup.
+- Ignored multicast smoke coverage in `tests/test_discovery_multicast.rs` for end-to-end announcer/listener verification on compatible runners.
 - Integration tests in `tests/test_trust.rs` checking trust level query, update, persistence, and invalid file recovery.
 - Integration tests in `tests/test_identity.rs` checking uniqueness, save/load, and sign/verify functions.
 - `lib.rs` to expose the library target of the crate.
