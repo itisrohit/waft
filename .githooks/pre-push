@@ -1,0 +1,17 @@
+#!/bin/sh
+# Block direct pushes to protected integration and production branches.
+
+remote_name="$1"
+
+while read -r local_ref local_sha remote_ref remote_sha
+do
+    case "$remote_name:$remote_ref" in
+        origin:refs/heads/dev|origin:refs/heads/main)
+            echo "❌ Direct pushes to '$remote_ref' are blocked in this repository."
+            echo "Use a short-lived branch and open a pull request instead."
+            exit 1
+            ;;
+    esac
+done
+
+exit 0
