@@ -612,15 +612,12 @@ async fn test_receive_watch_stdout()
 
 ### v0.6 — local AI review command (developer tooling)
 
-**Goal:** Run instant, zero-cost, secure AI code reviews locally via slash commands and git hooks.
+**Goal:** Run instant, zero-cost, secure AI code reviews locally via native slash commands.
 
 **Tasks:**
-- [ ] Implement `waft review` command with option flags (`--staged`, `--branch`).
-- [ ] Integrate local check wrappers (e.g. `semgrep`, `cargo-audit`, `cargo clippy`) in a parallel execution pipeline.
-- [ ] Add caching mechanisms: lockfile hashing for dependencies, file-hash lookup for source files.
-- [ ] Implement AST semantic slicing via tree-sitter or ast-grep rules to extract targets.
-- [ ] Design interactive review terminal UI (TUI) to inspect issues, explain problems, and apply suggested patches directly.
-- [ ] Register workspace slash command `/review` for local agent usage.
+- [x] Configure workspace unified slash command `/review` under `.agents/skills/review/SKILL.md`.
+- [x] Integrate compiler checks (`clippy`), security pattern checks (`semgrep`), and interactive fix applications.
+- [x] Enable automatic dependency checking and installation in the skill workflow.
 
 ---
 
