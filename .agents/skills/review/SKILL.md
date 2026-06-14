@@ -15,9 +15,10 @@ You are a senior security engineer and compiler expert. When the user runs the `
 3. If no code files have changed, report: "No code changes detected to review." and exit.
 
 ### Step 2: Run Local Check Engines
-Run the following commands to gather deterministic issues:
+Ensure dependencies are present and run checks:
 1. Run `cargo clippy --all-targets --all-features -- -D warnings` to collect Rust compiler diagnostics.
-2. If `semgrep` is available in the shell PATH, run `semgrep scan --config auto <changed_files>` to locate security/pattern issues.
+2. Check if `semgrep` is installed. If not, install it (e.g., using `HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install semgrep` on macOS, or `pip install semgrep` as a fallback).
+3. Once `semgrep` is available, run `semgrep scan --config auto <changed_files>` to locate security/pattern issues.
 
 ### Step 3: Analyze and Synthesize
 For each diagnostic warning or issue found in the changed code:
