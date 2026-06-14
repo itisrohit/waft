@@ -13,7 +13,10 @@ cargo check
 
 ```bash
 # Run all integration and unit tests
-cargo test
+cargo test --all-features
+
+# Run ignored multicast smoke coverage on a compatible machine
+cargo test --all-features --test test_discovery_multicast -- --ignored
 ```
 
 ## Code Quality & Lints
@@ -23,7 +26,7 @@ cargo test
 cargo clippy --all-targets --all-features -- -D warnings
 
 # Format all files in check mode
-cargo fmt --all -- --check
+cargo fmt --all --check
 
 # Format all files in-place
 cargo fmt --all

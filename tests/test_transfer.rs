@@ -22,6 +22,20 @@ fn create_temp_file(name: &str, content: &[u8]) -> Result<(PathBuf, PathBuf), an
     Ok((src_path, dest_dir))
 }
 
+/// Poll the given address until a TCP connection succeeds, confirming the
+/// receiver is actually listening. Retries up to 50 times with 20ms spacing
+/// (max 1 second), which is robust on slow CI runners without adding latency
+/// on fast machines.
+async fn wait_for_port(addr: std::net::SocketAddr) -> Result<(), anyhow::Error> {
+    for _ in 0..50 {
+        if tokio::net::TcpStream::connect(addr).await.is_ok() {
+            return Ok(());
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+    }
+    anyhow::bail!("Receiver did not start listening on {addr} within 1 second");
+}
+
 #[tokio::test]
 async fn test_small_file_transfer() -> Result<(), anyhow::Error> {
     let content = b"Hello world! Waft file transfer integration test.";
@@ -50,7 +64,7 @@ async fn test_small_file_transfer() -> Result<(), anyhow::Error> {
         tokio::spawn(async move { start_receiver(local_addr, trust, dest).await });
 
     // Wait 100ms for listener to bind
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    wait_for_port(local_addr).await?;
 
     // Send file
     send_file(local_addr, &sender_identity, &src_path).await?;
@@ -103,7 +117,7 @@ async fn test_large_file_transfer() -> Result<(), anyhow::Error> {
     let receiver_handle =
         tokio::spawn(async move { start_receiver(local_addr, trust, dest).await });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    wait_for_port(local_addr).await?;
 
     send_file(local_addr, &sender_identity, &src_path).await?;
 
@@ -140,7 +154,7 @@ async fn test_invalid_magic_rejected() -> Result<(), anyhow::Error> {
     let receiver_handle =
         tokio::spawn(async move { start_receiver(local_addr, trust, dest).await });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    wait_for_port(local_addr).await?;
 
     // Connect manually and send a full 64-byte header with bad magic bytes
     let mut socket = TcpStream::connect(local_addr).await?;
@@ -187,7 +201,7 @@ async fn test_blocked_peer_rejected() -> Result<(), anyhow::Error> {
     let receiver_handle =
         tokio::spawn(async move { start_receiver(local_addr, trust, dest).await });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    wait_for_port(local_addr).await?;
 
     // Attempt to send, should fail with Rejected error
     let send_result = send_file(local_addr, &sender_identity, &src_path).await;
@@ -226,7 +240,7 @@ async fn test_interrupted_transfer_cleanup() -> Result<(), anyhow::Error> {
     let receiver_handle =
         tokio::spawn(async move { start_receiver(local_addr, trust, dest).await });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    wait_for_port(local_addr).await?;
 
     // Send part of the header manually then abort
     let mut socket = TcpStream::connect(local_addr).await?;
@@ -265,7 +279,7 @@ async fn test_interrupted_transfer_cleanup() -> Result<(), anyhow::Error> {
     socket.flush().await?;
     drop(socket);
 
-    // Give the receiver 100ms to handle client disconnect & cleanup
+    // Give the receiver time to observe the disconnect and remove the partial file.
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // Verify partial file was deleted/cleaned up
@@ -297,7 +311,7 @@ async fn test_read_timeout_trigger() -> Result<(), anyhow::Error> {
     let receiver_handle =
         tokio::spawn(async move { start_receiver(local_addr, trust, dest_dir).await });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    wait_for_port(local_addr).await?;
 
     // Connect manually and send only 10 bytes (header needs 64)
     let mut socket = TcpStream::connect(local_addr).await?;
@@ -337,7 +351,7 @@ async fn test_header_fuzzing_robustness() -> Result<(), anyhow::Error> {
     let receiver_handle =
         tokio::spawn(async move { start_receiver(local_addr, trust, dest_dir).await });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    wait_for_port(local_addr).await?;
 
     // Fuzz with random lengths and content
     for len in [1, 2, 10, 45, 63, 64, 65, 128, 200] {
