@@ -9,7 +9,7 @@
 
 AirDrop feel on every OS. You run it once at boot, forget it exists, and files
 move instantly between your devices. No open-app-on-both-sides. No IP addresses.
-No pairing codes. Just `waft send r1-mac video.mp4` and it's done.
+No pairing codes. Just `waft send rohit-phone video.mp4` and it's done.
 
 ---
 
@@ -477,7 +477,7 @@ async fn test_tier3_auto_opens_file()
 **Tasks:**
 
 - [ ] `send.rs` — `sendfile(2)` on Linux, `sendfile` on macOS, buffered fallback on Windows
-- [x] Socket tuning — `TCP_NODELAY` + 4MB buffers on both sides of every connection
+- [ ] Socket tuning — `TCP_NODELAY` + 4MB buffers on both sides of every connection
 - [ ] BLAKE3 hashing concurrent with send (separate thread, shared mmap buffer)
 - [ ] `benches/bench_transfer.rs` — criterion harness, full size matrix
 - [ ] Run benchmark matrix, commit results to `bench_results.md`
@@ -607,20 +607,6 @@ async fn test_receive_watch_stdout()
 - Relay signals the connection — file bytes remain direct P2P
 - Self-hostable, one-click deploy to Fly.io / Railway
 - No state in relay, no file bytes ever touch it
-
----
-
-### v0.6 — local AI agent skills (developer tooling)
-
-**Goal:** Run instant, zero-cost AI-assisted code review and performance audits locally via native slash commands.
-
-**Tasks:**
-- [x] Configure workspace unified slash command `/review` under `.agents/skills/review/SKILL.md`.
-- [x] Integrate compiler checks (`clippy`), security pattern checks (`semgrep`), and interactive fix applications.
-- [x] Enable automatic dependency checking and installation in the skill workflow.
-- [x] Configure workspace unified slash command `/optimize` under `.agents/skills/optimize/SKILL.md`.
-- [x] Integrate performance lints (`clippy --perf`), binary size analysis (`cargo-bloat`, `cargo-llvm-lines`), assembly inspection (`cargo-show-asm`), syscall tracing (`strace`/`fs_usage`), and CPU flamegraph generation (`cargo-flamegraph`).
-- [x] Both skills follow the 2026 Agent Skills open standard (YAML frontmatter with `name`, `description`, `metadata`). Compatible with Claude Code CLI, OpenCode CLI, Codex CLI, and Antigravity IDE.
 
 ---
 

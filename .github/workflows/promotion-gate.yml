@@ -18,10 +18,8 @@ jobs:
 
       - name: Require dev as the only source branch for main
         if: github.base_ref == 'main'
-        env:
-          HEAD_REF: ${{ github.head_ref }}
         run: |
-          if [ "$HEAD_REF" != "dev" ]; then
+          if [ "${{ github.head_ref }}" != "dev" ]; then
             echo "Only the dev branch can be merged into main."
             exit 1
           fi
