@@ -30,6 +30,21 @@ To maintain high quality, we enforce pre-commit checks:
 - The `build.rs` script automatically runs `git config --local core.hooksPath .githooks` on build.
 - This ensures that `cargo fmt` and `cargo clippy` run before every commit locally.
 
+## AI Agent Skills via Slash Commands
+We ship two built-in agent skills for contributors. If you use a compatible AI agent (e.g., Claude Code CLI, OpenCode CLI, Codex CLI, or Antigravity IDE), you can run these commands directly in your editor:
+
+**`/review`** — Security & Code Quality Audit
+```text
+/review
+```
+Runs `cargo clippy`, checks/installs `semgrep` dynamically, scans the workspace for vulnerabilities or lints on your branch diff, and gives you interactive patch suggestions to apply immediately. **Run this before opening any pull request.**
+
+**`/optimize`** — Performance Audit
+```text
+/optimize
+```
+Runs static performance lints (`clippy --perf`), binary size analysis, assembly inspection, syscall tracing, and CPU flamegraph generation. Auto-installs all required tools. Run this when you suspect a throughput regression or want to verify your change does not add allocations to the hot transfer path.
+
 ## Pull Requests
 All pull requests must:
 1. Pass all checks in CI (Linux, macOS, Windows).
