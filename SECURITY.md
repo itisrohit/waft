@@ -13,4 +13,8 @@ We employ local and cloud-based static application security testing (SAST) tools
 * **Cargo Audit**: Audits cargo dependency versions against the Rust Sec Advisory Database.
 * **CodeQL**: Runs weekly in GitHub Actions to check compile paths.
 
-We encourage contributors to run on-demand local security audits by typing `/review` inside their compatible AI assistant (Claude Code CLI, OpenCode CLI, Codex CLI, or Antigravity IDE) before opening pull requests.
+We encourage contributors to run on-demand local security and performance audits before opening pull requests:
+* **`/review`** — runs `cargo clippy`, `semgrep`, and interactive fix patches in your AI agent.
+* **`/optimize`** — runs performance lints, binary size analysis, syscall tracing, and flamegraph profiling.
+
+Both commands are available in compatible AI agents (Claude Code CLI, OpenCode CLI, Codex CLI, or Antigravity IDE).

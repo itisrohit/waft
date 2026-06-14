@@ -9,13 +9,15 @@ cargo build
 cargo check
 ```
 
-### Testing
+## Testing
+
 ```bash
-# Run the integration and unit tests
+# Run all integration and unit tests
 cargo test
 ```
 
-### Code Quality & Lints
+## Code Quality & Lints
+
 ```bash
 # Run Clippy checks (treats all warnings as errors)
 cargo clippy --all-targets --all-features -- -D warnings
@@ -27,7 +29,8 @@ cargo fmt --all -- --check
 cargo fmt --all
 ```
 
-### Security & Dependency Auditing
+## Security & Dependency Auditing
+
 ```bash
 # Security vulnerability advisory scan (requires cargo-audit)
 cargo audit
@@ -36,11 +39,20 @@ cargo audit
 cargo deny check
 ```
 
-### AI Code Review (Agent Skill)
-Waft supports the unified agent skill standard for AI-assisted workspace reviews:
-* If you are developing inside **Claude Code CLI**, **OpenCode CLI**, **Codex CLI**, or **Antigravity IDE**, you can type:
-  ```text
-  /review
-  ```
-  This automatically runs `cargo clippy`, checks for `semgrep` (installing it if missing), identifies modified files, and prompts you with interactive diff patches to apply fixes.
+## AI Agent Skills
 
+`waft` ships two built-in agent skills compatible with **Claude Code CLI**, **OpenCode CLI**, **Codex CLI**, and **Antigravity IDE**.
+
+### `/review` — Security & Code Quality Audit
+Runs `cargo clippy`, installs and runs `semgrep`, identifies modified files, and offers interactive diff patches to apply fixes.
+```text
+/review
+```
+Run this before opening any pull request.
+
+### `/optimize` — Performance Audit
+Runs static performance lints (`clippy --perf`), binary size analysis (`cargo-bloat`), assembly inspection (`cargo-show-asm`), syscall tracing (`strace`/`fs_usage`), and CPU flamegraph generation. Auto-installs all required tools.
+```text
+/optimize
+```
+Run this when profiling, benchmarking, or investigating throughput regressions.

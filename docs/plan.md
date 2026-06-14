@@ -9,7 +9,7 @@
 
 AirDrop feel on every OS. You run it once at boot, forget it exists, and files
 move instantly between your devices. No open-app-on-both-sides. No IP addresses.
-No pairing codes. Just `waft send rohit-phone video.mp4` and it's done.
+No pairing codes. Just `waft send r1-mac video.mp4` and it's done.
 
 ---
 
@@ -610,14 +610,17 @@ async fn test_receive_watch_stdout()
 
 ---
 
-### v0.6 — local AI review command (developer tooling)
+### v0.6 — local AI agent skills (developer tooling)
 
-**Goal:** Run instant, zero-cost, secure AI code reviews locally via native slash commands.
+**Goal:** Run instant, zero-cost AI-assisted code review and performance audits locally via native slash commands.
 
 **Tasks:**
 - [x] Configure workspace unified slash command `/review` under `.agents/skills/review/SKILL.md`.
 - [x] Integrate compiler checks (`clippy`), security pattern checks (`semgrep`), and interactive fix applications.
 - [x] Enable automatic dependency checking and installation in the skill workflow.
+- [x] Configure workspace unified slash command `/optimize` under `.agents/skills/optimize/SKILL.md`.
+- [x] Integrate performance lints (`clippy --perf`), binary size analysis (`cargo-bloat`, `cargo-llvm-lines`), assembly inspection (`cargo-show-asm`), syscall tracing (`strace`/`fs_usage`), and CPU flamegraph generation (`cargo-flamegraph`).
+- [x] Both skills follow the 2026 Agent Skills open standard (YAML frontmatter with `name`, `description`, `metadata`). Compatible with Claude Code CLI, OpenCode CLI, Codex CLI, and Antigravity IDE.
 
 ---
 
