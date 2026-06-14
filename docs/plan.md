@@ -477,7 +477,7 @@ async fn test_tier3_auto_opens_file()
 **Tasks:**
 
 - [ ] `send.rs` — `sendfile(2)` on Linux, `sendfile` on macOS, buffered fallback on Windows
-- [ ] Socket tuning — `TCP_NODELAY` + 4MB buffers on both sides of every connection
+- [x] Socket tuning — `TCP_NODELAY` + 4MB buffers on both sides of every connection
 - [ ] BLAKE3 hashing concurrent with send (separate thread, shared mmap buffer)
 - [ ] `benches/bench_transfer.rs` — criterion harness, full size matrix
 - [ ] Run benchmark matrix, commit results to `bench_results.md`
