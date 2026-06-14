@@ -27,3 +27,16 @@ All pull requests must:
 1. Pass all checks in CI (Linux, macOS, Windows).
 2. Follow Conventional Commits format (e.g. `feat(transfer): add zero-copy path for Linux`).
 3. Include tests verifying the change.
+
+## Branch Flow
+Do not work directly on `dev` or `main`.
+
+Use this flow:
+1. Branch from `dev` into a short-lived branch such as `feature/*`, `fix/*`, `chore/*`, or `dependabot/*`.
+2. Open pull requests from the short-lived branch into `dev`.
+3. Promote tested changes by opening a pull request from `dev` into `main`.
+
+Repository enforcement:
+- Direct pushes to `dev` and `main` are blocked by GitHub branch protection.
+- Local Git hooks also block direct pushes to `origin/dev` and `origin/main`.
+- `main` only accepts pull requests whose source branch is `dev`.
