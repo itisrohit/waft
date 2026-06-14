@@ -1,0 +1,25 @@
+name: Promotion Gate
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+
+permissions:
+  contents: read
+
+jobs:
+  promotion-source-gate:
+    name: Promotion Source Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Allow PRs into dev
+        if: github.base_ref == 'dev'
+        run: exit 0
+
+      - name: Require dev as the only source branch for main
+        if: github.base_ref == 'main'
+        run: |
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "Only the dev branch can be merged into main."
+            exit 1
+          fi
