@@ -36,3 +36,11 @@ cargo audit
 cargo deny check
 ```
 
+### AI Code Review (Agent Skill)
+Waft supports the unified agent skill standard for AI-assisted workspace reviews:
+* If you are developing inside **Claude Code CLI**, **OpenCode CLI**, **Codex CLI**, or **Antigravity IDE**, you can type:
+  ```text
+  /review
+  ```
+  This automatically runs `cargo clippy`, checks for `semgrep` (installing it if missing), identifies modified files, and prompts you with interactive diff patches to apply fixes.
+
