@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Unified `/review` agent skill under `.agents/skills/review/SKILL.md` supporting clippy, semgrep, and auto-installation check.
 - `identity.rs` module for Ed25519 cryptographic identity key generation, file storage, and signing.
 - `discovery.rs` module for UDP multicast peer presence discovery and mapping.
 - `error.rs` module for custom error types representing core system and I/O states.
@@ -18,3 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `rand_core` dependency in `Cargo.toml` to access `OsRng` directly.
 - License metadata and `deny.toml` rules update to allow required dependency licenses.
 - Initial workspace setups, lint configurations, and CI/CD pipelines.
+
+### Fixed
+- Critical shell injection security vulnerability in GitHub Actions `Promotion Gate` workflow by utilizing intermediate environment variables.

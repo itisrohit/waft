@@ -22,6 +22,13 @@ To maintain high quality, we enforce pre-commit checks:
 - The `build.rs` script automatically runs `git config --local core.hooksPath .githooks` on build.
 - This ensures that `cargo fmt` and `cargo clippy` run before every commit locally.
 
+## AI Code Reviews via Slash Command
+We provide built-in support for on-demand AI code reviews. If you use a compatible AI agent (e.g., Claude Code CLI, OpenCode CLI, Codex CLI, or Antigravity IDE), you can execute:
+```text
+/review
+```
+This runs `cargo clippy`, checks/installs `semgrep` dynamically, scans the workspace for vulnerabilities or lints on your branch diff, and gives you interactive patch suggestions to apply immediately. We highly encourage running this before opening pull requests.
+
 ## Pull Requests
 All pull requests must:
 1. Pass all checks in CI (Linux, macOS, Windows).
