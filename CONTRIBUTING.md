@@ -10,17 +10,40 @@ Thank you for your interest in contributing to `waft`!
 2. Run `cargo check` or `cargo build` to build the binary and automatically configure the local Git hooks path to `.githooks`.
 3. Run tests:
    ```bash
-   cargo test
+   cargo test --all-features
+   ```
+   For the multicast discovery smoke test on a machine that supports multicast:
+   ```bash
+   cargo test --all-features --test test_discovery_multicast -- --ignored
    ```
 4. Run Clippy:
    ```bash
    cargo clippy --all-targets --all-features -- -D warnings
+   ```
+5. Run formatting checks:
+   ```bash
+   cargo fmt --all --check
    ```
 
 ## Git Hook Automation
 To maintain high quality, we enforce pre-commit checks:
 - The `build.rs` script automatically runs `git config --local core.hooksPath .githooks` on build.
 - This ensures that `cargo fmt` and `cargo clippy` run before every commit locally.
+
+## AI Agent Skills via Slash Commands
+We ship two built-in agent skills for contributors. If you use a compatible AI agent (e.g., Claude Code CLI, OpenCode CLI, Codex CLI, or Antigravity IDE), you can run these commands directly in your editor:
+
+**`/review`** — Security & Code Quality Audit
+```text
+/review
+```
+Runs `cargo clippy`, checks/installs `semgrep` dynamically, scans the workspace for vulnerabilities or lints on your branch diff, and gives you interactive patch suggestions to apply immediately. **Run this before opening any pull request.**
+
+**`/optimize`** — Performance Audit
+```text
+/optimize
+```
+Runs static performance lints (`clippy --perf`), binary size analysis, assembly inspection, syscall tracing, and CPU flamegraph generation. Auto-installs all required tools. Run this when you suspect a throughput regression or want to verify your change does not add allocations to the hot transfer path.
 
 ## Pull Requests
 All pull requests must:
