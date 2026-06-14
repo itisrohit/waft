@@ -41,3 +41,20 @@ Repository enforcement:
 - Local Git hooks also block direct pushes to `origin/dev` and `origin/main`.
 - `main` only accepts pull requests whose source branch is `dev`.
 - If someone accidentally opens a feature or chore pull request against `main`, GitHub automatically retargets it to `dev`.
+
+## Default Branch
+The repository default branch is `main` for standard GitHub navigation and clearer release semantics.
+
+Even with `main` as the default branch:
+- day-to-day work still goes into `dev` first
+- Dependabot still targets `dev`
+- only `dev` should be promoted into `main`
+
+## Checks And Merge Speed
+Quality gates are intentionally front-loaded onto `dev`.
+
+- Pull requests into `dev` run the full CI and security checks.
+- Pull requests from `dev` into `main` use a lighter promotion gate.
+- Administrators can bypass unfinished checks when fast promotion is necessary.
+
+This means `dev` is the main integration-quality branch, while `main` is the release branch.
