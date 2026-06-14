@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
-tokio = { version = "1.40", features = ["full"] }
+tokio = { version = "1.40", features = ["full", "test-util"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 blake3 = "1.5"
 socket2 = "0.6"

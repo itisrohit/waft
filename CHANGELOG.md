@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Core TCP file transfer receiver server and wire protocol in `transfer.rs` with automatic trust promotion, path traversal sanitization, and parallel BLAKE3 hash verification.
+- Core TCP file transfer client in `send.rs` supporting protocol serialization, metadata signing, and file streaming.
+- Cross-platform socket performance optimizations (enabling `TCP_NODELAY` and setting 4MB send/recv buffers on streams safely via `socket2`).
+- Comprehensive transfer integration test suite in `tests/test_transfer.rs` covering small/large file roundtrips, blocked peer rejection, partial download cleanup on interruption, virtual time-warped read timeouts, and fuzzing robustness.
+- New protocol-specific error variants (`InvalidHeader`, `SignatureVerification`, and `HashMismatch`) in `error.rs`.
 - Unified `/review` agent skill under `.agents/skills/review/SKILL.md` supporting clippy, semgrep, and auto-installation check.
 - `identity.rs` module for Ed25519 cryptographic identity key generation, file storage, and signing.
 - `discovery.rs` module for UDP multicast peer presence discovery and mapping.

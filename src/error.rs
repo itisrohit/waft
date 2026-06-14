@@ -31,4 +31,21 @@ pub enum WaftError {
     /// A TOML deserialization error.
     #[error("toml deserialization: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
+
+    /// Invalid protocol header.
+    #[error("invalid protocol header: {0}")]
+    InvalidHeader(String),
+
+    /// Cryptographic signature verification failed.
+    #[error("signature verification failed: {0}")]
+    SignatureVerification(String),
+
+    /// BLAKE3 hash mismatch.
+    #[error("blake3 hash mismatch: expected {expected}, got {actual}")]
+    HashMismatch {
+        /// The expected BLAKE3 hash.
+        expected: String,
+        /// The actual BLAKE3 hash.
+        actual: String,
+    },
 }
