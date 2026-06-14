@@ -1,0 +1,22 @@
+name: PR Base Retarget
+
+on:
+  pull_request_target:
+    branches: [ main ]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  retarget-non-release-prs:
+    name: Retarget Non-Release PRs
+    if: github.event.pull_request.head.ref != 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retarget PR from main to dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh api --method PATCH "repos/${{ github.repository }}/pulls/${PR_NUMBER}" -f base=dev

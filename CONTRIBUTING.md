@@ -40,3 +40,4 @@ Repository enforcement:
 - Direct pushes to `dev` and `main` are blocked by GitHub branch protection.
 - Local Git hooks also block direct pushes to `origin/dev` and `origin/main`.
 - `main` only accepts pull requests whose source branch is `dev`.
+- If someone accidentally opens a feature or chore pull request against `main`, GitHub automatically retargets it to `dev`.
