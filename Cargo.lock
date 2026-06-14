@@ -1215,6 +1215,7 @@ dependencies = [
  "clap_complete",
  "ed25519-dalek",
  "nix",
+ "rand_core",
  "serde",
  "socket2 0.5.10",
  "thiserror",
