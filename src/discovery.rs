@@ -13,6 +13,30 @@ use tokio::net::UdpSocket;
 use tokio::sync::RwLock;
 use tokio::time;
 
+/// Configuration options for the discovery service.
+#[derive(Debug, Clone)]
+pub struct DiscoveryConfig {
+    /// IP address to bind announcer and listener sockets to.
+    pub bind_ip: std::net::IpAddr,
+    /// UDP multicast group address and port.
+    pub multicast_addr: SocketAddr,
+    /// How frequently to broadcast the peer presence.
+    pub announce_interval: Duration,
+    /// Time period after which inactive peers are evicted.
+    pub peer_timeout: Duration,
+}
+
+impl Default for DiscoveryConfig {
+    fn default() -> Self {
+        Self {
+            bind_ip: std::net::IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            multicast_addr: SocketAddr::from(([239, 255, 77, 77], 7777)),
+            announce_interval: Duration::from_secs(2),
+            peer_timeout: Duration::from_secs(10),
+        }
+    }
+}
+
 /// Payload sent over UDP multicast to announce a peer's presence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerAnnouncement {
@@ -63,6 +87,25 @@ impl PeerMap {
         self.peers.values().cloned().collect()
     }
 
+    /// Checks if a peer announcement warrants an update to the database.
+    ///
+    /// Returns `true` if the peer is new, or if its metadata (name or address) has changed,
+    /// or if the last seen timestamp is older than the `throttle` duration.
+    #[must_use]
+    pub fn should_update(
+        &self,
+        fingerprint: &str,
+        name: &str,
+        addr: SocketAddr,
+        throttle: Duration,
+    ) -> bool {
+        self.peers.get(fingerprint).is_none_or(|existing| {
+            existing.name != name
+                || existing.addr != addr
+                || existing.last_seen.elapsed() >= throttle
+        })
+    }
+
     /// Retains only peers whose last seen timestamp is within the specified timeout.
     pub fn clean_expired(&mut self, timeout: Duration) {
         let now = Instant::now();
@@ -81,8 +124,7 @@ pub async fn start_announcer(
     name: String,
     fingerprint: String,
     port: u16,
-    multicast_addr: SocketAddr,
-    bind_ip: std::net::IpAddr,
+    config: DiscoveryConfig,
     mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) -> Result<(), WaftError> {
     let raw_socket = socket2::Socket::new(
@@ -95,11 +137,11 @@ pub async fn start_announcer(
     raw_socket.set_reuse_port(true)?;
 
     // Bind to bind_ip and let OS assign a random outgoing port
-    let bind_addr = SocketAddr::new(bind_ip, 0);
+    let bind_addr = SocketAddr::new(config.bind_ip, 0);
     raw_socket.bind(&bind_addr.into())?;
     raw_socket.set_nonblocking(true)?;
 
-    if let std::net::IpAddr::V4(ipv4) = bind_ip {
+    if let std::net::IpAddr::V4(ipv4) = config.bind_ip {
         let _ = raw_socket.set_multicast_if_v4(&ipv4);
     }
 
@@ -115,12 +157,12 @@ pub async fn start_announcer(
     let payload_str = toml::to_string(&announcement)?;
     let payload = payload_str.into_bytes();
 
-    let mut interval = time::interval(Duration::from_secs(2));
+    let mut interval = time::interval(config.announce_interval);
 
     loop {
         tokio::select! {
             _ = interval.tick() => {
-                let _ = socket.send_to(&payload, multicast_addr).await;
+                let _ = socket.send_to(&payload, config.multicast_addr).await;
             }
             _ = shutdown_rx.changed() => {
                 if *shutdown_rx.borrow() {
@@ -140,8 +182,7 @@ pub async fn start_announcer(
 pub async fn start_listener(
     my_fingerprint: String,
     peers: Arc<RwLock<PeerMap>>,
-    multicast_addr: SocketAddr,
-    bind_ip: std::net::IpAddr,
+    config: DiscoveryConfig,
     mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) -> Result<(), WaftError> {
     let raw_socket = socket2::Socket::new(
@@ -154,7 +195,7 @@ pub async fn start_listener(
     raw_socket.set_reuse_port(true)?;
 
     // Binding specifically to the multicast port to receive group traffic
-    let port = multicast_addr.port();
+    let port = config.multicast_addr.port();
     let bind_addr = SocketAddr::from(([0, 0, 0, 0], port));
     raw_socket.bind(&bind_addr.into())?;
     raw_socket.set_nonblocking(true)?;
@@ -162,7 +203,7 @@ pub async fn start_listener(
     let std_socket: std::net::UdpSocket = raw_socket.into();
     let socket = UdpSocket::from_std(std_socket)?;
 
-    let ip = match multicast_addr.ip() {
+    let ip = match config.multicast_addr.ip() {
         std::net::IpAddr::V4(ipv4) => ipv4,
         std::net::IpAddr::V6(_) => {
             return Err(std::io::Error::new(
@@ -173,7 +214,7 @@ pub async fn start_listener(
         }
     };
 
-    let join_interface = match bind_ip {
+    let join_interface = match config.bind_ip {
         std::net::IpAddr::V4(ipv4) => ipv4,
         std::net::IpAddr::V6(_) => Ipv4Addr::UNSPECIFIED,
     };
@@ -181,6 +222,7 @@ pub async fn start_listener(
 
     let mut buf = [0u8; 1024];
     let mut clean_interval = time::interval(Duration::from_secs(5));
+    let throttle_dur = Duration::from_secs(1);
 
     loop {
         tokio::select! {
@@ -192,6 +234,19 @@ pub async fn start_listener(
                             .and_then(|s| toml::from_str::<PeerAnnouncement>(s).ok());
 
                         if let Some(announcement) = parsed {
+                            // Validate announcement payload fields to handle edge cases safely
+                            if announcement.port == 0 {
+                                continue;
+                            }
+                            if announcement.fingerprint.len() != 64
+                                || !announcement.fingerprint.chars().all(|c| c.is_ascii_hexdigit())
+                            {
+                                continue;
+                            }
+                            if announcement.name.is_empty() || announcement.name.len() > 63 {
+                                continue;
+                            }
+
                             // Ignore self-announcements
                             if announcement.fingerprint == my_fingerprint {
                                 continue;
@@ -200,15 +255,23 @@ pub async fn start_listener(
                             let mut tcp_addr = src_addr;
                             tcp_addr.set_port(announcement.port);
 
-                            let discovered = DiscoveredPeer {
-                                name: announcement.name,
-                                fingerprint: announcement.fingerprint.clone(),
-                                addr: tcp_addr,
-                                last_seen: Instant::now(),
+                            // Lock optimization: check with a read lock first to throttle writes
+                            let should_update = {
+                                let map = peers.read().await;
+                                map.should_update(&announcement.fingerprint, &announcement.name, tcp_addr, throttle_dur)
                             };
 
-                            let mut map = peers.write().await;
-                            map.insert(announcement.fingerprint, discovered);
+                            if should_update {
+                                let discovered = DiscoveredPeer {
+                                    name: announcement.name,
+                                    fingerprint: announcement.fingerprint.clone(),
+                                    addr: tcp_addr,
+                                    last_seen: Instant::now(),
+                                };
+
+                                let mut map = peers.write().await;
+                                map.insert(announcement.fingerprint, discovered);
+                            }
                         }
                     }
                     Err(e) => {
@@ -218,7 +281,7 @@ pub async fn start_listener(
             }
             _ = clean_interval.tick() => {
                 let mut map = peers.write().await;
-                map.clean_expired(Duration::from_secs(10));
+                map.clean_expired(config.peer_timeout);
             }
             _ = shutdown_rx.changed() => {
                 if *shutdown_rx.borrow() {
