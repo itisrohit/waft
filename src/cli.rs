@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(unix)]
 use tokio::net::UnixStream;
 
 const BOLD: &str = "\x1b[1m";
@@ -30,6 +31,7 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
+#[cfg(unix)]
 /// Connects to the daemon Unix socket, auto-starting the daemon if not running.
 async fn connect_to_daemon(socket_path: &Path) -> Result<UnixStream> {
     if !socket_path.exists() {
@@ -57,6 +59,7 @@ async fn connect_to_daemon(socket_path: &Path) -> Result<UnixStream> {
     }
 }
 
+#[cfg(unix)]
 /// Spawns the daemon process detached.
 fn start_daemon_process() -> Result<()> {
     let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
@@ -70,6 +73,7 @@ fn start_daemon_process() -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 /// Runs the IPC client to send a command to the daemon and handle the response.
 pub async fn run_client(socket_path: &Path, command: DaemonCommand) -> Result<()> {
     let mut stream = connect_to_daemon(socket_path).await?;
@@ -168,4 +172,9 @@ pub async fn run_client(socket_path: &Path, command: DaemonCommand) -> Result<()
     }
 
     Ok(())
+}
+
+#[cfg(not(unix))]
+pub async fn run_client(_socket_path: &Path, _command: DaemonCommand) -> Result<()> {
+    anyhow::bail!("CLI client mode is not supported on this platform.");
 }

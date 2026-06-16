@@ -10,6 +10,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
@@ -78,6 +79,7 @@ fn get_local_peer_name() -> String {
 /// 2. Starts TCP file receiver.
 /// 3. Starts UDP discovery announcer & listener.
 /// 4. Listens on a Unix socket for CLI IPC.
+#[cfg(unix)]
 pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     info!(dir = ?base_dir, "Starting waft daemon");
 
@@ -202,6 +204,7 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     }
 }
 
+#[cfg(unix)]
 /// Handles a single Unix socket client connection.
 async fn handle_client(
     mut stream: UnixStream,
@@ -348,4 +351,9 @@ async fn handle_client(
 
     writer.flush().await?;
     Ok(())
+}
+
+#[cfg(not(unix))]
+pub async fn start_daemon(_base_dir: &Path) -> Result<()> {
+    anyhow::bail!("Daemon mode is not supported on this platform.");
 }
