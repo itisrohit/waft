@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Zero-copy file transfers via raw OS `libc::sendfile` bindings on Unix (Linux and macOS) targets.
+- Dynamic socket send buffer sizing and chunk size bounding (clamped between 64KB and 2MB) dynamically adjusted based on `SO_SNDBUF`.
+- Virtual memory-mapped file reading via the `memmap2` crate for cross-platform file transfers and fast fallback streaming on Windows.
+- Concurrently overlapped file hashing and TCP connection establishment using `tokio::try_join!`.
+- Automated loopback latency, throughput, and performance integration test suite in `tests/test_perf.rs`.
 - IPC Unix socket daemon server (`src/daemon.rs`) and CLI client (`src/cli.rs`) implementation to coordinate file transfers and LAN peer tracking.
 - Subcommand CLI argument parser and routing dispatch (`src/main.rs`) using the `clap` derive macro.
 - CLI user interface improvements: beautiful formatted terminal tables for listing peers and trust configurations, and a dynamic carriage-return progress bar.
