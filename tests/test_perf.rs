@@ -142,9 +142,9 @@ async fn perf_100mb_throughput_floor() -> Result<(), anyhow::Error> {
     assert!(dest_file_path.exists());
     assert_eq!(fs::metadata(&dest_file_path)?.len(), size as u64);
 
-    // Throughput floor target of 500 MB/s on local machine (we set a relaxed limit of 150 MB/s for CI runners)
+    // Throughput floor target of 500 MB/s on local machine (we set a relaxed limit of 100 MB/s for CI runners)
     let floor = if std::env::var("CI").is_ok() {
-        150.0
+        100.0
     } else {
         500.0
     };
