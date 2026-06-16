@@ -46,6 +46,10 @@ async fn wait_for_port(addr: SocketAddr) -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn perf_1mb_under_100ms() -> Result<(), anyhow::Error> {
+    if cfg!(debug_assertions) {
+        println!("Skipping performance test in debug mode");
+        return Ok(());
+    }
     let size = 1024 * 1024; // 1MB
     let (src_path, dest_dir) = create_temp_file("1mb", size)?;
 
@@ -103,6 +107,10 @@ async fn perf_1mb_under_100ms() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn perf_100mb_throughput_floor() -> Result<(), anyhow::Error> {
+    if cfg!(debug_assertions) {
+        println!("Skipping performance test in debug mode");
+        return Ok(());
+    }
     let size = 100 * 1024 * 1024; // 100MB
     let (src_path, dest_dir) = create_temp_file("100mb", size)?;
 
@@ -166,6 +174,10 @@ async fn perf_100mb_throughput_floor() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn perf_small_file_latency() -> Result<(), anyhow::Error> {
+    if cfg!(debug_assertions) {
+        println!("Skipping performance test in debug mode");
+        return Ok(());
+    }
     let size = 1024; // 1KB
     let (src_path, dest_dir) = create_temp_file("1kb", size)?;
 
