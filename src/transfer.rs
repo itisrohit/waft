@@ -14,7 +14,7 @@ const CHUNK_SIZE: usize = 2 * 1024 * 1024; // 2MB
 const READ_TIMEOUT_SECS: u64 = 10;
 
 /// Helper to convert a 32-byte public key into a hex string fingerprint.
-fn fingerprint_from_bytes(public_key_bytes: &[u8; 32]) -> String {
+pub(crate) fn fingerprint_from_bytes(public_key_bytes: &[u8; 32]) -> String {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
     let mut s = String::with_capacity(64);
     for &b in public_key_bytes {
@@ -120,7 +120,9 @@ struct TransferHeader {
     tier: TrustTier,
 }
 
-fn parse_fixed_header(header_bytes: &[u8; 64]) -> Result<(usize, u64, [u8; 32]), WaftError> {
+pub(crate) fn parse_fixed_header(
+    header_bytes: &[u8; 64],
+) -> Result<(usize, u64, [u8; 32]), WaftError> {
     let magic = &header_bytes[0..2];
     if magic != [0xFA, 0x57] {
         return Err(WaftError::InvalidHeader(format!(
@@ -147,7 +149,7 @@ fn parse_fixed_header(header_bytes: &[u8; 64]) -> Result<(usize, u64, [u8; 32]),
     Ok((name_len, file_size, expected_hash))
 }
 
-fn sanitize_filename(raw_name: &str) -> Result<PathBuf, WaftError> {
+pub(crate) fn sanitize_filename(raw_name: &str) -> Result<PathBuf, WaftError> {
     Path::new(raw_name)
         .file_name()
         .map(PathBuf::from)
@@ -392,7 +394,7 @@ async fn handle_connection(
 }
 
 // Minimal hex module inline helper to avoid external dependencies
-mod hex {
+pub(crate) mod hex {
     pub fn encode(bytes: [u8; 32]) -> String {
         const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
         let mut s = String::with_capacity(64);

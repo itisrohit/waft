@@ -29,6 +29,9 @@ enum Commands {
         peer: String,
         /// Path to the file to transfer
         file: String,
+        /// Use QUIC transport instead of TCP
+        #[arg(long)]
+        quic: bool,
     },
     /// List active discovered peers on the LAN
     List,
@@ -51,6 +54,7 @@ fn init_logging() {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    waft::quic_transport::init_crypto_provider();
     let cli = Cli::parse();
 
     // Determine waft base directory path
@@ -65,13 +69,14 @@ async fn main() -> Result<(), anyhow::Error> {
             init_logging();
             start_daemon(&base_dir).await?;
         }
-        Commands::Send { peer, file } => {
+        Commands::Send { peer, file, quic } => {
             let file_path = PathBuf::from(file);
             // Convert to absolute path if possible
             let abs_path = std::fs::canonicalize(&file_path).unwrap_or(file_path);
             let cmd = DaemonCommand::SendFile {
                 peer,
                 file_path: abs_path.to_string_lossy().to_string(),
+                quic,
             };
             run_client(&socket_path, cmd).await?;
         }

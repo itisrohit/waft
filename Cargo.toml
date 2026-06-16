@@ -21,6 +21,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap_complete = "4.5"
 rand_core = { version = "0.6", features = ["getrandom"]}
 memmap2 = "0.9"
+quinn = { version = "0.11", default-features = false, features = ["rustls-aws-lc-rs", "runtime-tokio"] }
+rcgen = "0.13"
+rustls = { version = "0.23", features = ["aws_lc_rs"] }
+rustls-pki-types = "1.8"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "socket", "uio"] }
@@ -31,6 +35,10 @@ criterion = "0.5"
 
 [[bench]]
 name = "bench_transfer"
+harness = false
+
+[[bench]]
+name = "bench_quic"
 harness = false
 
 [lints.rust]
