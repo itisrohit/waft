@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::fs;
 use waft::cli::run_client;
 use waft::daemon::{DaemonCommand, start_daemon};
