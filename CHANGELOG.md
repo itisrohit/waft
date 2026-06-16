@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- IPC Unix socket daemon server (`src/daemon.rs`) and CLI client (`src/cli.rs`) implementation to coordinate file transfers and LAN peer tracking.
+- Subcommand CLI argument parser and routing dispatch (`src/main.rs`) using the `clap` derive macro.
+- CLI user interface improvements: beautiful formatted terminal tables for listing peers and trust configurations, and a dynamic carriage-return progress bar.
+- Automatic transfer cancellation in the daemon, aborting active file transfers immediately if the IPC client disconnects (Ctrl+C).
+- Optimized release profile in `Cargo.toml` with LTO, abort panics, single codegen units, and symbol stripping.
+- Lock contention optimizations: scoped lock guards in `src/trust.rs` and `src/daemon.rs` to release read locks before executing blocking I/O and loop iterations.
+- Scaffolded Criterion loopback benchmarking harness (`benches/bench_transfer.rs`) and dependencies.
 - Core TCP file transfer receiver server and wire protocol in `transfer.rs` with automatic trust promotion, path traversal sanitization, and parallel BLAKE3 hash verification.
 - Core TCP file transfer client in `send.rs` supporting protocol serialization, metadata signing, and file streaming.
 - Cross-platform socket performance optimizations (enabling `TCP_NODELAY` and setting 4MB send/recv buffers on streams safely via `socket2`).

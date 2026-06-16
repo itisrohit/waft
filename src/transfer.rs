@@ -381,6 +381,10 @@ async fn handle_connection(
         });
     }
 
+    // Ensure all data is fully flushed and synced to disk before acknowledging success
+    file.flush().await?;
+    file.sync_all().await?;
+
     info!(filename = ?header.filename, "File received and verified successfully");
     socket.write_all(&[0x02]).await?; // DONE / SUCCESS
 

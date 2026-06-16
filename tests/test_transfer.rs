@@ -67,7 +67,7 @@ async fn test_small_file_transfer() -> Result<(), anyhow::Error> {
     wait_for_port(local_addr).await?;
 
     // Send file
-    send_file(local_addr, &sender_identity, &src_path).await?;
+    send_file(local_addr, &sender_identity, &src_path, None).await?;
 
     // Verify file received and contents match
     let dest_file_path = dest_dir.join("waft_test_src_small");
@@ -119,7 +119,7 @@ async fn test_large_file_transfer() -> Result<(), anyhow::Error> {
 
     wait_for_port(local_addr).await?;
 
-    send_file(local_addr, &sender_identity, &src_path).await?;
+    send_file(local_addr, &sender_identity, &src_path, None).await?;
 
     let dest_file_path = dest_dir.join("waft_test_src_large");
     assert!(dest_file_path.exists());
@@ -204,7 +204,7 @@ async fn test_blocked_peer_rejected() -> Result<(), anyhow::Error> {
     wait_for_port(local_addr).await?;
 
     // Attempt to send, should fail with Rejected error
-    let send_result = send_file(local_addr, &sender_identity, &src_path).await;
+    let send_result = send_file(local_addr, &sender_identity, &src_path, None).await;
     assert!(send_result.is_err());
 
     let dest_file_path = dest_dir.join("waft_test_src_blocked");

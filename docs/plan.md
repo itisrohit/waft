@@ -479,7 +479,7 @@ async fn test_tier3_auto_opens_file()
 - [ ] `send.rs` — `sendfile(2)` on Linux, `sendfile` on macOS, buffered fallback on Windows
 - [x] Socket tuning — `TCP_NODELAY` + 4MB buffers on both sides of every connection
 - [ ] BLAKE3 hashing concurrent with send (separate thread, shared mmap buffer)
-- [ ] `benches/bench_transfer.rs` — criterion harness, full size matrix
+- [x] `benches/bench_transfer.rs` — criterion harness scaffolded
 - [ ] Run benchmark matrix, commit results to `bench_results.md`
 - [ ] QUIC branch experiment — add `quinn`, run same matrix, compare p50/p95/p99
 - [ ] Decision: document outcome in `bench_results.md`, merge winning transport
