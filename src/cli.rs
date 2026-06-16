@@ -1,10 +1,18 @@
 //! CLI command parsing and thin client logic.
 
-use crate::daemon::{DaemonCommand, DaemonResponse};
-use anyhow::{Context, Result};
-use std::io::Write;
+use crate::daemon::DaemonCommand;
+use anyhow::Result;
 use std::path::Path;
+
+#[cfg(unix)]
+use crate::daemon::DaemonResponse;
+#[cfg(unix)]
+use anyhow::Context;
+#[cfg(unix)]
+use std::io::Write;
+#[cfg(unix)]
 use std::time::Duration;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(unix)]
 use tokio::net::UnixStream;
@@ -175,6 +183,7 @@ pub async fn run_client(socket_path: &Path, command: DaemonCommand) -> Result<()
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unused_async)]
 pub async fn run_client(_socket_path: &Path, _command: DaemonCommand) -> Result<()> {
     anyhow::bail!("CLI client mode is not supported on this platform.");
 }

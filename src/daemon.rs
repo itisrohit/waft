@@ -1,18 +1,33 @@
 //! Daemon lifecycle and core event loop.
 
-use crate::discovery::{DiscoveryConfig, PeerMap, start_announcer, start_listener};
-use crate::identity::Identity;
-use crate::transfer::start_receiver;
-use crate::trust::{TrustStore, TrustTier};
-use anyhow::{Context, Result};
+use crate::trust::TrustTier;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+#[cfg(unix)]
+use crate::discovery::{DiscoveryConfig, PeerMap, start_announcer, start_listener};
+#[cfg(unix)]
+use crate::identity::Identity;
+#[cfg(unix)]
+use crate::transfer::start_receiver;
+#[cfg(unix)]
+use crate::trust::TrustStore;
+#[cfg(unix)]
+use anyhow::Context;
+#[cfg(unix)]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::path::PathBuf;
+#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
+#[cfg(unix)]
 use tokio::sync::RwLock;
+#[cfg(unix)]
 use tracing::{error, info, warn};
 
 /// Shared peer information structure for IPC.
@@ -354,6 +369,7 @@ async fn handle_client(
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unused_async)]
 pub async fn start_daemon(_base_dir: &Path) -> Result<()> {
     anyhow::bail!("Daemon mode is not supported on this platform.");
 }
