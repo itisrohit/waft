@@ -80,6 +80,19 @@ impl TrustStore {
             .unwrap_or(TrustTier::Ask)
     }
 
+    /// Returns a list of all configured peer trust tiers.
+    pub fn get_all(&self) -> Vec<(String, TrustTier)> {
+        let read_guard = self
+            .data
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        read_guard
+            .peers
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
+    }
+
     /// Sets the trust tier for a peer and persists the change to disk.
     ///
     /// # Errors
@@ -98,11 +111,13 @@ impl TrustStore {
 
     /// Persists the current trust data to disk.
     fn save(&self) -> Result<(), WaftError> {
-        let read_guard = self
-            .data
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let content = toml::to_string(&*read_guard)?;
+        let content = {
+            let read_guard = self
+                .data
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            toml::to_string(&*read_guard)?
+        };
         fs::write(&self.path, content)?;
         Ok(())
     }

@@ -41,6 +41,7 @@ pub async fn send_file(
     peer_addr: SocketAddr,
     identity: &Identity,
     file_path: &Path,
+    progress_tx: Option<tokio::sync::mpsc::UnboundedSender<(u64, u64)>>,
 ) -> Result<(), WaftError> {
     info!(path = ?file_path, peer = %peer_addr, "Preparing to send file");
 
@@ -140,6 +141,9 @@ pub async fn send_file(
         }
 
         bytes_sent += n as u64;
+        if let Some(ref tx) = progress_tx {
+            let _ = tx.send((bytes_sent, file_size));
+        }
     }
     socket.flush().await?;
 

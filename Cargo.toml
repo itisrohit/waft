@@ -13,15 +13,23 @@ arboard = "3.4"
 clap = { version = "4.5", features = ["derive"] }
 toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "2.0"
 anyhow = "1.0"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap_complete = "4.5"
 rand_core = { version = "0.6", features = ["getrandom"]}
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "socket", "uio"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "bench_transfer"
+harness = false
 
 [lints.rust]
 unsafe_code = "deny"
@@ -33,3 +41,10 @@ unwrap_used = "warn"
 expect_used = "warn"
 panic = "warn"
 pedantic = "warn"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
