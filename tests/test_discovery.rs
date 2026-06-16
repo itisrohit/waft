@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::{Duration, Instant};
 use waft::discovery::{DiscoveredPeer, PeerAnnouncement, PeerMap, parse_announcement};
 
-fn valid_fingerprint() -> &'static str {
+const fn valid_fingerprint() -> &'static str {
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 }
 
