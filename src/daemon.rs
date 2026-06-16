@@ -45,7 +45,6 @@ pub enum DaemonCommand {
     SendFile {
         peer: String,
         file_path: String,
-        quic: bool,
     },
     ListTrust,
     SetTrust {
@@ -141,18 +140,6 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
         }
     });
     info!(port = 7777, downloads = ?download_dir, "TCP receiver started");
-
-    let quic_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 7777);
-    let quic_trust = Arc::clone(&trust_store);
-    let quic_downloads = download_dir.clone();
-    tokio::spawn(async move {
-        if let Err(e) =
-            crate::quic_transfer::start_quic_receiver(quic_addr, quic_trust, quic_downloads).await
-        {
-            error!(error = %e, "QUIC Receiver failed");
-        }
-    });
-    info!(port = 7777, downloads = ?download_dir, "QUIC receiver started");
 
     // 6. Start UDP Multicast Discovery
     let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -267,11 +254,7 @@ async fn handle_client(
                 .write_all(format!("{serialized}\n").as_bytes())
                 .await?;
         }
-        DaemonCommand::SendFile {
-            peer,
-            file_path,
-            quic,
-        } => {
+        DaemonCommand::SendFile { peer, file_path } => {
             // Locate target peer
             let found_peer = peers
                 .read()
@@ -287,12 +270,7 @@ async fn handle_client(
                 let addr = peer_node.addr;
 
                 let send_task = tokio::spawn(async move {
-                    if quic {
-                        crate::quic_send::send_file_quic(addr, &identity_clone, &path, Some(tx))
-                            .await
-                    } else {
-                        crate::send::send_file(addr, &identity_clone, &path, Some(tx)).await
-                    }
+                    crate::send::send_file(addr, &identity_clone, &path, Some(tx)).await
                 });
 
                 // Read and forward progress reports to the CLI client

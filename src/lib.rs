@@ -14,9 +14,7 @@ pub mod daemon;
 pub mod discovery;
 pub mod error;
 pub mod identity;
-pub mod quic_send;
-pub mod quic_transfer;
-pub mod quic_transport;
+
 pub mod send;
 pub mod transfer;
 pub mod trust;

@@ -19,6 +19,7 @@ async fn send_file_zero_copy(
     socket: &TcpStream,
     file: &std::fs::File,
     file_size: u64,
+    offset: u64,
     chunk_size: usize,
     progress_tx: Option<&tokio::sync::mpsc::UnboundedSender<(u64, u64)>>,
 ) -> Result<(), WaftError> {
@@ -27,9 +28,10 @@ async fn send_file_zero_copy(
     let out_fd = socket.as_raw_fd();
     let in_fd = file.as_raw_fd();
     let mut bytes_sent = 0u64;
+    let bytes_to_send = file_size - offset;
 
-    while bytes_sent < file_size {
-        let remaining = file_size - bytes_sent;
+    while bytes_sent < bytes_to_send {
+        let remaining = bytes_to_send - bytes_sent;
         let to_send = std::cmp::min(remaining, chunk_size as u64) as usize;
 
         socket.writable().await?;
@@ -42,7 +44,7 @@ async fn send_file_zero_copy(
                     libc::sendfile(
                         in_fd,
                         out_fd,
-                        bytes_sent as libc::off_t,
+                        (offset + bytes_sent) as libc::off_t,
                         &raw mut len,
                         std::ptr::null_mut(),
                         0,
@@ -63,8 +65,8 @@ async fn send_file_zero_copy(
 
             #[cfg(not(target_os = "macos"))]
             {
-                let mut offset = bytes_sent as libc::off_t;
-                let res = unsafe { libc::sendfile(out_fd, in_fd, &raw mut offset, to_send) };
+                let mut file_offset = (offset + bytes_sent) as libc::off_t;
+                let res = unsafe { libc::sendfile(out_fd, in_fd, &raw mut file_offset, to_send) };
                 if res >= 0 {
                     Ok(res as usize)
                 } else {
@@ -83,12 +85,14 @@ async fn send_file_zero_copy(
                 }
                 bytes_sent += n as u64;
                 if let Some(tx) = progress_tx {
-                    let _ = tx.send((bytes_sent, file_size));
+                    let _ = tx.send((offset + bytes_sent, file_size));
                 }
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
             Err(_) => {
-                return Err(WaftError::Interrupted { bytes_sent });
+                return Err(WaftError::Interrupted {
+                    bytes_sent: offset + bytes_sent,
+                });
             }
         }
     }
@@ -97,26 +101,28 @@ async fn send_file_zero_copy(
 }
 
 #[cfg(not(unix))]
-#[allow(clippy::cast_possible_wrap)]
 async fn send_file_fallback(
     socket: &mut TcpStream,
     mmap: Option<&[u8]>,
     file_size: u64,
+    offset: u64,
     chunk_size: usize,
     progress_tx: Option<&tokio::sync::mpsc::UnboundedSender<(u64, u64)>>,
 ) -> Result<(), WaftError> {
     let mut bytes_sent = 0u64;
+    let bytes_to_send = file_size - offset;
 
     if let Some(m) = mmap {
-        while bytes_sent < file_size {
-            let remaining = file_size - bytes_sent;
+        while bytes_sent < bytes_to_send {
+            let remaining = bytes_to_send - bytes_sent;
             let to_send = std::cmp::min(remaining, chunk_size as u64) as usize;
-            let chunk = &m[bytes_sent as usize..(bytes_sent as usize + to_send)];
+            let start = (offset + bytes_sent) as usize;
+            let chunk = &m[start..start + to_send];
 
             socket.write_all(chunk).await?;
             bytes_sent += to_send as u64;
             if let Some(tx) = progress_tx {
-                let _ = tx.send((bytes_sent, file_size));
+                let _ = tx.send((offset + bytes_sent, file_size));
             }
         }
     } else if let Some(tx) = progress_tx {
@@ -237,12 +243,25 @@ pub async fn send_file(
     let mut ack = [0u8; 1];
     socket.read_exact(&mut ack).await?;
 
+    let mut offset = 0u64;
     if ack[0] == 0x00 {
         warn!(peer = %peer_addr, "Transfer rejected by receiver");
         return Err(WaftError::Rejected);
+    } else if ack[0] == 0x02 {
+        info!(peer = %peer_addr, "File already exists on receiver and matches hash. Skipped transfer.");
+        if let Some(ref tx) = progress_tx {
+            let _ = tx.send((file_size, file_size));
+        }
+        return Ok(());
+    } else if ack[0] == 0x03 {
+        // Read 8-byte offset
+        let mut offset_bytes = [0u8; 8];
+        socket.read_exact(&mut offset_bytes).await?;
+        offset = u64::from_be_bytes(offset_bytes);
+        info!(peer = %peer_addr, offset = offset, "Resuming file transfer from offset");
     } else if ack[0] != 0x01 {
         return Err(WaftError::InvalidHeader(format!(
-            "Invalid ACK byte received: expected 0x01, got {:#04X}",
+            "Invalid ACK byte received: expected 0x01, 0x02, or 0x03, got {:#04X}",
             ack[0]
         )));
     }
@@ -252,7 +271,15 @@ pub async fn send_file(
     // 12. Stream file body
     #[cfg(unix)]
     {
-        send_file_zero_copy(&socket, &file, file_size, chunk_size, progress_tx.as_ref()).await?;
+        send_file_zero_copy(
+            &socket,
+            &file,
+            file_size,
+            offset,
+            chunk_size,
+            progress_tx.as_ref(),
+        )
+        .await?;
     }
     #[cfg(not(unix))]
     {
@@ -260,6 +287,7 @@ pub async fn send_file(
             &mut socket,
             mmap.as_deref().map(|m| &**m),
             file_size,
+            offset,
             chunk_size,
             progress_tx.as_ref(),
         )

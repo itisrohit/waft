@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Application-layer resumable file transfers (Atomic Offset Resumption) over TCP Zero-Copy to survive network drops.
+- Receiver-side atomic writing using `<BLAKE3_HASH>.part` temp files and post-transfer BLAKE3 integrity verification.
+- Handshake negotiation using resume ACK byte `0x03` and 8-byte big-endian `u64` offset representation.
+- Offset-seeking sender support using macOS zero-copy `libc::sendfile` seek arguments and memory-mapped slice slicing fallback.
+- Integration test `test_tcp_resume_transfer` verifying partial file persistence, offset resume negotiation, and completion.
 - Zero-copy file transfers via raw OS `libc::sendfile` bindings on Unix (Linux and macOS) targets.
 - Dynamic socket send buffer sizing and chunk size bounding (clamped between 64KB and 2MB) dynamically adjusted based on `SO_SNDBUF`.
 - Virtual memory-mapped file reading via the `memmap2` crate for cross-platform file transfers and fast fallback streaming on Windows.
@@ -39,5 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - License metadata and `deny.toml` rules update to allow required dependency licenses.
 - Initial workspace setups, lint configurations, and CI/CD pipelines.
 
+### Changed
+- Replaced the experimental UDP/QUIC module stack (`wudp_send`, `wudp_transfer`, `wudp_transport`, Quinn, and rustls dependencies) with robust resumable TCP Zero-Copy.
+
 ### Fixed
 - Critical shell injection security vulnerability in GitHub Actions `Promotion Gate` workflow by utilizing intermediate environment variables.
+- Replaced `unwrap()` in performance integration test `tests/test_perf.rs` with safe error handling to adhere to pedantic guidelines.

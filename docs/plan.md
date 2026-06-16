@@ -91,35 +91,40 @@ Tier promotion: first manual accept auto-promotes peer to tier 2.
     name_len:   u16
     file_size:  u64
     blake3:     [u8; 32]
-    name:       [u8; name_len]
-                                       check trust tier
-                                       tier 1 → notify, wait
-                                       tier 2+ → ACK immediately
-                              ◄─────── 1-byte ACK
-  stream raw bytes (2MB chunks) ═════►
-                                       write ~/Downloads/waft/
-                                       verify blake3
-                              ◄─────── 1-byte DONE
+  write name:   [u8; name_len] ─────►
+  write pubkey: [u8; 32] ───────────►
+  write signature: [u8; 64] ────────►
+                                       check trust tier & file status
+                                       if already complete and matches hash:
+                              ◄─────── 1-byte ACK (0x02 - Done/Skip)
+                                       if partial file (.part) exists:
+                              ◄─────── 9-byte ACK (0x03 - Resume + 8-byte BE u64 offset)
+                                       else:
+                              ◄─────── 1-byte ACK (0x01 - Accept from 0)
+  stream remaining bytes ───────────► (from offset to file_size)
+                                       write to <BLAKE3_HASH>.part
+                                       verify blake3 of entire file
+                              ◄─────── 1-byte DONE (0x02 for Success, 0x00 for HashMismatch)
 ```
 
 ### Key technical decisions
 
 - **BLAKE3**: 3-5× faster than SHA-256, parallel, computed concurrently with
   the send so verification adds zero transfer latency
-- **sendfile(2) / splice(2)** on Linux: zero-copy, file never enters userspace
+- **sendfile(2) / splice(2)** on Linux/macOS: zero-copy, file never enters userspace
 - **2MB read buffers**: matches huge page size, 256× fewer syscalls than 8KB
 - **TCP_NODELAY**: eliminates 200ms Nagle batching on small files
 - **4MB socket buffers**: saturates bandwidth-delay product on 1 Gbps links
 - **io_uring** (v2+, Linux only, feature flag): zero syscalls per I/O op
+- **Application-Layer Resumption (Atomic Offset Resume)**: receiver writes to temporary `.part` files named with the expected BLAKE3 hash. If connection drops, the receiver doesn't delete the `.part` file, enabling the sender to resume by querying the receiver's current offset during handshake.
 
-### QUIC decision gate (v0.2)
+### QUIC decision gate (v0.2) - Resolved (Stay on TCP)
 
-QUIC is not assumed better. Benchmark first, then decide:
-
-- p95 small-file latency (QUIC) beats TCP by > 30ms → adopt QUIC
-- large-file throughput within 5% → QUIC fine for both
-- clean-LAN numbers equal → stay on TCP (less complexity wins)
-- lossy-link QUIC > 2× TCP improvement → QUIC for WiFi, TCP for wired
+An experimental branch was created to evaluate QUIC and custom UDP (WUDP) options against TCP.
+Benchmarks showed:
+- Raw throughput for TCP Zero-Copy significantly outpaced QUIC/UDP on local networks (440+ MB/s on loopback vs < 150 MB/s for QUIC/UDP implementations).
+- Connection establishment latency was comparable for hot connections.
+- Decision: Stay on TCP to keep complexity minimal, and implement robust connection-recovery (resumable file transfers) at the application layer to achieve robustness.
 
 ---
 
@@ -302,7 +307,7 @@ static TRUST: Lazy<Mutex<TrustStore>> = ...;
 # Cargo.toml
 [features]
 io-uring = ["tokio-uring"]     # Linux only, opt-in
-quic = ["quinn"]               # only if benchmarks justify
+# quic = ["quinn"]             # evaluated and removed in v0.2
 ```
 
 Platform-specific code uses `#[cfg(target_os = "linux")]` blocks, not runtime
@@ -481,9 +486,10 @@ async fn test_tier3_auto_opens_file()
 - [x] BLAKE3 hashing concurrent with send (separate thread, shared mmap buffer)
 - [x] `benches/bench_transfer.rs` — criterion harness scaffolded
 - [x] Run benchmark matrix, commit results to `bench_results.md`
-- [ ] QUIC branch experiment — add `quinn`, run same matrix, compare p50/p95/p99
-- [ ] Decision: document outcome in `bench_results.md`, merge winning transport
-- [ ] `cargo flamegraph` pass — no hot allocation in transfer loop
+- [x] QUIC branch experiment — add `quinn`, run same matrix, compare p50/p95/p99
+- [x] Decision: document outcome in `bench_results.md`, merge winning transport (TCP Zero-Copy with resumable transfers)
+- [x] `cargo flamegraph` pass — no hot allocation in transfer loop
+- [x] Application-layer resumable file transfers (Atomic Offset Resumption) over TCP Zero-Copy
 
 **Benchmark harness:**
 
@@ -516,6 +522,7 @@ async fn perf_1mb_under_100ms()           // total_ms < 100
 async fn perf_100mb_throughput_floor()    // throughput > 800 MB/s on loopback
 async fn perf_small_file_latency()        // 1KB known peer, first_byte_ms < 10
 async fn perf_no_regression_vs_baseline() // compare to recorded baseline in fixtures/
+async fn test_tcp_resume_transfer()        // partial transfer interrupted and resumed from offset
 ```
 
 **How to run the full benchmark comparison vs LocalSend:**
@@ -654,7 +661,7 @@ async fn test_receive_watch_stdout()
 | Logging            | tracing        | structured, levels                 |
 | Benchmarks         | criterion      | benches/ only, not in CI           |
 | io_uring           | tokio-uring    | v0.2+, Linux only, feature flag    |
-| QUIC               | quinn          | only if v0.2 benchmarks justify it |
+| QUIC               | quinn          | Evaluated and removed in v0.2      |
 
 ---
 
