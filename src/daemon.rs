@@ -121,7 +121,7 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     // 4. Initialize PeerMap
     let peers = Arc::new(RwLock::new(PeerMap::new()));
 
-    // 5. Start TCP Receiver on port 7777
+    // 5. Start TCP and QUIC Receivers on port 7777
     let tcp_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 7777);
     let download_dir = std::env::var("HOME")
         .map_or_else(

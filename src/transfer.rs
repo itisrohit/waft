@@ -6,7 +6,7 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{error, info, warn};
 
@@ -14,7 +14,7 @@ const CHUNK_SIZE: usize = 2 * 1024 * 1024; // 2MB
 const READ_TIMEOUT_SECS: u64 = 10;
 
 /// Helper to convert a 32-byte public key into a hex string fingerprint.
-fn fingerprint_from_bytes(public_key_bytes: &[u8; 32]) -> String {
+pub(crate) fn fingerprint_from_bytes(public_key_bytes: &[u8; 32]) -> String {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
     let mut s = String::with_capacity(64);
     for &b in public_key_bytes {
@@ -120,7 +120,9 @@ struct TransferHeader {
     tier: TrustTier,
 }
 
-fn parse_fixed_header(header_bytes: &[u8; 64]) -> Result<(usize, u64, [u8; 32]), WaftError> {
+pub(crate) fn parse_fixed_header(
+    header_bytes: &[u8; 64],
+) -> Result<(usize, u64, [u8; 32]), WaftError> {
     let magic = &header_bytes[0..2];
     if magic != [0xFA, 0x57] {
         return Err(WaftError::InvalidHeader(format!(
@@ -147,7 +149,7 @@ fn parse_fixed_header(header_bytes: &[u8; 64]) -> Result<(usize, u64, [u8; 32]),
     Ok((name_len, file_size, expected_hash))
 }
 
-fn sanitize_filename(raw_name: &str) -> Result<PathBuf, WaftError> {
+pub(crate) fn sanitize_filename(raw_name: &str) -> Result<PathBuf, WaftError> {
     Path::new(raw_name)
         .file_name()
         .map(PathBuf::from)
@@ -308,31 +310,93 @@ async fn handle_connection(
         "Accepting file transfer request"
     );
 
-    socket.write_all(&[0x01]).await?; // ACK / ACCEPT
-
-    // Prepare target file path
-    let file_path = download_dir.join(&header.filename);
+    // Prepare paths
     tokio::fs::create_dir_all(&download_dir).await?;
+    let file_path = download_dir.join(&header.filename);
+    let hash_hex = hex::encode(header.expected_hash);
+    let part_file_path = download_dir.join(format!("{hash_hex}.part"));
 
-    let mut file = match tokio::fs::File::create(&file_path).await {
-        Ok(f) => f,
-        Err(e) => {
-            error!(error = %e, "Failed to create target file on disk");
-            socket.write_all(&[0x00]).await?;
-            return Err(WaftError::Io(e));
+    // 1. Check if the final file already exists and is complete
+    let mut exists_and_complete = false;
+    if let Ok(meta) = tokio::fs::metadata(&file_path).await {
+        exists_and_complete = meta.len() == header.file_size;
+    }
+
+    if exists_and_complete {
+        let open_res = tokio::fs::File::open(&file_path).await;
+        if let Ok(mut f) = open_res {
+            let mut hasher = blake3::Hasher::new();
+            let mut hash_buf = vec![0u8; CHUNK_SIZE];
+            let mut match_ok = true;
+            while match_ok {
+                match f.read(&mut hash_buf).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        hasher.update(&hash_buf[..n]);
+                    }
+                    Err(_) => {
+                        match_ok = false;
+                    }
+                }
+            }
+            if match_ok && hasher.finalize().as_bytes() == &header.expected_hash {
+                info!(filename = ?header.filename, "File already exists and matches expected hash. Skipping transfer.");
+                socket.write_all(&[0x02]).await?; // Done/Success
+                return Ok(());
+            }
         }
+    }
+
+    // 2. Check if a partial file exists
+    let mut offset = 0u64;
+    let mut resume = false;
+    if let Ok(meta) = tokio::fs::metadata(&part_file_path).await {
+        let len = meta.len();
+        if len > 0 && len < header.file_size {
+            offset = len;
+            resume = true;
+        }
+    }
+
+    // 3. Send ACK / Accept
+    if resume {
+        let mut resp = Vec::with_capacity(9);
+        resp.push(0x03); // Resume ACK
+        resp.extend_from_slice(&offset.to_be_bytes());
+        socket.write_all(&resp).await?;
+        info!(filename = ?header.filename, offset = offset, "Resuming file transfer");
+    } else {
+        socket.write_all(&[0x01]).await?; // Accept from 0
+        info!(filename = ?header.filename, "Starting new file transfer from offset 0");
+    }
+
+    // 4. Open/Create the part file
+    let mut file = if resume {
+        tokio::fs::OpenOptions::new()
+            .write(true)
+            .open(&part_file_path)
+            .await?
+    } else {
+        tokio::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&part_file_path)
+            .await?
     };
 
-    // Stream and write file body in CHUNK_SIZE chunks while computing BLAKE3 hash
-    let mut hasher = blake3::Hasher::new();
-    let mut remaining = header.file_size;
+    if resume {
+        file.seek(std::io::SeekFrom::Start(offset)).await?;
+    }
+
+    // 5. Stream body
+    let mut remaining = header.file_size - offset;
     let mut buffer = vec![0u8; CHUNK_SIZE];
 
     while remaining > 0 {
         let to_read = usize::try_from(std::cmp::min(remaining, CHUNK_SIZE as u64))
             .map_err(|_| WaftError::InvalidHeader("Chunk size exceeds usize limits".into()))?;
 
-        // Apply read timeout to body stream chunks to prevent slowloris hanging
         let n = match tokio::time::timeout(
             std::time::Duration::from_secs(READ_TIMEOUT_SECS),
             socket.read(&mut buffer[..to_read]),
@@ -340,19 +404,16 @@ async fn handle_connection(
         .await
         {
             Ok(Ok(0)) => {
-                // Premature EOF
-                let _ = tokio::fs::remove_file(&file_path).await;
+                // Premature EOF - keep the partial file for future resume
                 return Err(WaftError::Interrupted {
                     bytes_sent: header.file_size - remaining,
                 });
             }
             Ok(Ok(n)) => n,
             Ok(Err(e)) => {
-                let _ = tokio::fs::remove_file(&file_path).await;
                 return Err(WaftError::Io(e));
             }
             Err(_) => {
-                let _ = tokio::fs::remove_file(&file_path).await;
                 return Err(WaftError::Io(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     "Body read timed out",
@@ -361,38 +422,52 @@ async fn handle_connection(
         };
 
         file.write_all(&buffer[..n]).await?;
-        hasher.update(&buffer[..n]);
         remaining -= n as u64;
     }
 
-    // Finalize hash and verify
+    // Ensure all data is fully flushed before hashing
+    file.flush().await?;
+    file.sync_all().await?;
+    drop(file); // close file
+
+    // 6. Verify entire file hash
+    let mut file_to_hash = tokio::fs::File::open(&part_file_path).await?;
+    let mut hasher = blake3::Hasher::new();
+    let mut hash_buf = vec![0u8; CHUNK_SIZE];
+    loop {
+        let n = file_to_hash.read(&mut hash_buf).await?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&hash_buf[..n]);
+    }
     let computed_hash = hasher.finalize();
+
     if computed_hash.as_bytes() != &header.expected_hash {
         error!(
             expected = %hex::encode(header.expected_hash),
             actual = %computed_hash.to_hex(),
             "BLAKE3 hash verification failed. Deleting corrupted file."
         );
-        let _ = tokio::fs::remove_file(&file_path).await;
-        socket.write_all(&[0x00]).await?; // Hash Mismatch / Failure
+        let _ = tokio::fs::remove_file(&part_file_path).await;
+        socket.write_all(&[0x00]).await?;
         return Err(WaftError::HashMismatch {
             expected: hex::encode(header.expected_hash),
             actual: computed_hash.to_hex().to_string(),
         });
     }
 
-    // Ensure all data is fully flushed and synced to disk before acknowledging success
-    file.flush().await?;
-    file.sync_all().await?;
+    // Rename to final filename
+    tokio::fs::rename(&part_file_path, &file_path).await?;
 
     info!(filename = ?header.filename, "File received and verified successfully");
-    socket.write_all(&[0x02]).await?; // DONE / SUCCESS
+    socket.write_all(&[0x02]).await?; // Done/Success
 
     Ok(())
 }
 
 // Minimal hex module inline helper to avoid external dependencies
-mod hex {
+pub(crate) mod hex {
     pub fn encode(bytes: [u8; 32]) -> String {
         const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
         let mut s = String::with_capacity(64);
