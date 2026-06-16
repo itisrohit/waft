@@ -480,7 +480,7 @@ async fn test_tier3_auto_opens_file()
 - [x] Socket tuning — `TCP_NODELAY` + 4MB buffers on both sides of every connection
 - [x] BLAKE3 hashing concurrent with send (separate thread, shared mmap buffer)
 - [x] `benches/bench_transfer.rs` — criterion harness scaffolded
-- [ ] Run benchmark matrix, commit results to `bench_results.md`
+- [x] Run benchmark matrix, commit results to `bench_results.md`
 - [ ] QUIC branch experiment — add `quinn`, run same matrix, compare p50/p95/p99
 - [ ] Decision: document outcome in `bench_results.md`, merge winning transport
 - [ ] `cargo flamegraph` pass — no hot allocation in transfer loop
