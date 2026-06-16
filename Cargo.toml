@@ -20,9 +20,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap_complete = "4.5"
 rand_core = { version = "0.6", features = ["getrandom"]}
+memmap2 = "0.9"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "socket", "uio"] }
+libc = "0.2"
 
 [dev-dependencies]
 criterion = "0.5"
