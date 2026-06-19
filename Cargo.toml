@@ -28,7 +28,7 @@ nix = { version = "0.31", features = ["fs", "socket", "uio"] }
 libc = "0.2"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 
 [[bench]]
 name = "bench_transfer"
