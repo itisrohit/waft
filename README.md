@@ -19,6 +19,20 @@ cargo test --all-features
 cargo test --all-features --test test_discovery_multicast -- --ignored
 ```
 
+## macOS Login Autostart
+
+Install the daemon as a per-user `launchd` agent:
+
+```bash
+waft daemon install
+```
+
+Remove the agent with:
+
+```bash
+waft daemon uninstall
+```
+
 ## Code Quality & Lints
 
 ```bash
