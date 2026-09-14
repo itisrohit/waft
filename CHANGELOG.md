@@ -10,6 +10,8 @@
   protocol, preserving WebRTC signaling and enabling automatic discovery experiments.
 - Made the deployed rendezvous URL the default, while retaining environment
   overrides for self-hosted deployments and tests.
+- Added `--signaling-room` and optional `--signaling-url` daemon flags for
+  remote rendezvous configuration without shell environment variables.
 
 All notable changes to this project will be documented in this file.
 
