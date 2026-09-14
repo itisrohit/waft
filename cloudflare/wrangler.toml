@@ -1,0 +1,11 @@
+name = "waft-signaling"
+main = "worker.ts"
+compatibility_date = "2026-09-01"
+
+[[durable_objects.bindings]]
+name = "WAFT_ROOMS"
+class_name = "WaftRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WaftRoom"]

@@ -4,10 +4,12 @@ waft is LAN-first. On the same network it uses UDP discovery and the existing
 authenticated TCP transfer, with no server dependency. Cross-network support
 is opt-in behind the `internet` Cargo feature.
 
-The internet path has three pieces:
+The recommended hosted deployment uses Cloudflare Durable Objects. A small
+self-hosted Rust server is also included for users who want full control. The
+internet path has three pieces:
 
-1. A self-hosted WebSocket signaling server introduces peers in a shared room
-   and forwards only SDP negotiation messages.
+1. A WebSocket signaling service introduces peers in a shared room and forwards
+   only SDP negotiation messages. The Cloudflare deployment is in `cloudflare/`.
 2. WebRTC performs ICE using `WAFT_ICE_SERVERS`, trying direct/STUN paths first
    and TURN when configured.
 3. File data is sent over the authenticated WebRTC data channel; the signaling

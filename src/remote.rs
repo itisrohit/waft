@@ -255,7 +255,17 @@ pub async fn connect_signaling(
     config: &RemoteConfig,
     peer: RemotePeer,
 ) -> Result<SignalingConnection> {
-    let (socket, _) = tokio_tungstenite::connect_async(&config.signaling_url)
+    let room_token = base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        config.room.as_bytes(),
+    );
+    let separator = if config.signaling_url.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
+    let signaling_url = format!("{}{separator}room={room_token}", config.signaling_url);
+    let (socket, _) = tokio_tungstenite::connect_async(signaling_url)
         .await
         .context("connect signaling server")?;
     let (mut sink, mut source) = socket.split();
