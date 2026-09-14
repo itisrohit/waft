@@ -25,7 +25,10 @@ fn validate_file_name(name: &str) -> Result<()> {
 
 /// Starts an endpoint and prints its endpoint address for a second machine.
 pub async fn bind() -> Result<Endpoint> {
-    let endpoint = Endpoint::bind(presets::N0).await?;
+    let endpoint = Endpoint::builder(presets::N0)
+        .alpns(vec![ALPN.to_vec()])
+        .bind()
+        .await?;
     endpoint.online().await;
     println!(
         "WAFT_IROH_ENDPOINT={}",
