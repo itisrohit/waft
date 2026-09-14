@@ -6,6 +6,8 @@
   foundation for cross-network transfers. The LAN transport remains the default.
 - Added an isolated `iroh-spike` feature and `waft-iroh` CLI harness for testing
   public-key addressed QUIC file streaming with direct-connect and relay fallback.
+- Added optional iroh endpoint metadata to the existing internet rendezvous
+  protocol, preserving WebRTC signaling and enabling automatic discovery experiments.
 
 All notable changes to this project will be documented in this file.
 

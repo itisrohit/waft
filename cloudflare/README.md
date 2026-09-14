@@ -1,8 +1,8 @@
 # Cloudflare signaling deployment
 
 This Worker is the recommended hosted signaling service for waft. It uses one
-Durable Object per room, forwards only SDP negotiation messages, and never
-receives file bytes.
+Durable Object per room, forwards SDP negotiation messages and optional iroh
+endpoint metadata, and never receives file bytes.
 
 Install Wrangler, authenticate with Cloudflare, then deploy:
 
@@ -22,4 +22,6 @@ export WAFT_ICE_SERVERS='stun:stun.example.net:3478'
 ```
 
 The Rust client adds the room to the WebSocket URL automatically. Deploy a
-TURN server separately if direct WebRTC connectivity fails for some users.
+TURN server separately if direct WebRTC connectivity fails for some users. The
+same rendezvous endpoint can also exchange iroh endpoint addresses when clients
+use the `iroh-internet` feature.

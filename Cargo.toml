@@ -43,6 +43,7 @@ criterion = "0.8"
 default = []
 internet = ["base64", "bytes", "futures-util", "tokio-tungstenite", "uuid", "webrtc"]
 iroh-spike = ["iroh"]
+iroh-internet = ["internet", "iroh"]
 
 [[bench]]
 name = "bench_transfer"

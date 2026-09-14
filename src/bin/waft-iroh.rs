@@ -1,6 +1,8 @@
 //! Command-line harness for the iroh transport spike.
 
+#[cfg(feature = "iroh-spike")]
 use clap::Parser;
+#[cfg(feature = "iroh-spike")]
 use std::path::PathBuf;
 
 #[cfg(feature = "iroh-spike")]

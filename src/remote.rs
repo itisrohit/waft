@@ -35,6 +35,7 @@ use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 const MAX_SIGNAL_MESSAGE_BYTES: usize = 256 * 1024;
+const MAX_IROH_ENDPOINT_BYTES: usize = 16 * 1024;
 
 /// Runtime settings for the optional internet path.
 #[derive(Debug, Clone)]
@@ -81,7 +82,12 @@ pub struct RemotePeer {
     pub id: Uuid,
     pub name: String,
     pub fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iroh_endpoint: Option<String>,
 }
+
+/// Remote peers learned from the rendezvous service.
+pub type RemotePeerRegistry = Arc<RwLock<HashMap<Uuid, RemotePeer>>>;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -95,8 +101,8 @@ pub enum SignalMessage {
     Error { message: String },
 }
 
-/// A bidirectional signaling connection. SDP is the only payload sent here;
-/// file bytes never pass through the signaling server.
+/// A bidirectional rendezvous connection. It carries SDP negotiation and
+/// optional endpoint metadata; file bytes never pass through the server.
 pub struct SignalingConnection {
     pub outgoing: tokio::sync::mpsc::UnboundedSender<SignalMessage>,
     pub incoming: tokio::sync::mpsc::UnboundedReceiver<SignalMessage>,
@@ -148,7 +154,14 @@ async fn handle_signaling_connection(stream: TcpStream, rooms: Rooms) -> Result<
         writer.abort();
         return Err(anyhow!("first signaling message must register"));
     };
-    if room.is_empty() || peer.name.is_empty() || peer.fingerprint.len() != 64 {
+    if room.is_empty()
+        || peer.name.is_empty()
+        || peer.fingerprint.len() != 64
+        || peer
+            .iroh_endpoint
+            .as_ref()
+            .is_some_and(|endpoint| endpoint.is_empty() || endpoint.len() > MAX_IROH_ENDPOINT_BYTES)
+    {
         writer.abort();
         return Err(anyhow!("invalid peer registration"));
     }
@@ -428,12 +441,21 @@ pub async fn send_file_over_signal(
     progress: Option<tokio::sync::mpsc::UnboundedSender<(u64, u64)>>,
 ) -> Result<()> {
     let local_id = Uuid::new_v4();
+    #[cfg(feature = "iroh-internet")]
+    let iroh_endpoint_handle = crate::iroh_transport::bind_endpoint().await?;
+    #[cfg(feature = "iroh-internet")]
+    let iroh_endpoint = Some(crate::iroh_transport::endpoint_address_json(
+        &iroh_endpoint_handle,
+    )?);
+    #[cfg(not(feature = "iroh-internet"))]
+    let iroh_endpoint = None;
     let mut signaling = connect_signaling(
         config,
         RemotePeer {
             id: local_id,
             name,
             fingerprint: identity.fingerprint(),
+            iroh_endpoint,
         },
     )
     .await?;
@@ -624,42 +646,97 @@ pub async fn run_remote_receiver(
     name: String,
     downloads: std::path::PathBuf,
     trust: Arc<crate::trust::TrustStore>,
+    peers: RemotePeerRegistry,
 ) -> Result<()> {
     let local_id = Uuid::new_v4();
+    #[cfg(feature = "iroh-internet")]
+    let iroh_endpoint_handle = crate::iroh_transport::bind_endpoint().await?;
+    #[cfg(feature = "iroh-internet")]
+    let iroh_endpoint = Some(crate::iroh_transport::endpoint_address_json(
+        &iroh_endpoint_handle,
+    )?);
+    #[cfg(not(feature = "iroh-internet"))]
+    let iroh_endpoint = None;
     let mut signaling = connect_signaling(
         config,
         RemotePeer {
             id: local_id,
             name,
             fingerprint: identity.fingerprint(),
+            iroh_endpoint,
         },
     )
     .await?;
     while let Some(message) = signaling.incoming.recv().await {
-        if let SignalMessage::Offer { from, to, sdp } = message {
-            if to != local_id {
-                continue;
+        match message {
+            SignalMessage::Welcome { peers: discovered } => {
+                let mut registry = peers.write().await;
+                registry.clear();
+                registry.extend(discovered.into_iter().map(|peer| (peer.id, peer)));
             }
-            let peer_connection = create_peer_connection(&config.ice_servers).await?;
-            let downloads = downloads.clone();
-            let trust = Arc::clone(&trust);
-            let outgoing = signaling.outgoing.clone();
-            tokio::spawn(async move {
-                if let Err(error) = accept_file_offer(
-                    &peer_connection,
-                    sdp,
-                    downloads,
-                    trust,
-                    &outgoing,
-                    local_id,
-                    from,
-                )
-                .await
-                {
-                    tracing::warn!(%error, "remote file receive failed");
-                }
-            });
+            SignalMessage::PeerJoined { peer } => {
+                peers.write().await.insert(peer.id, peer);
+            }
+            SignalMessage::PeerLeft { id } => {
+                peers.write().await.remove(&id);
+            }
+            SignalMessage::Offer { from, to, sdp } if to == local_id => {
+                let peer_connection = create_peer_connection(&config.ice_servers).await?;
+                let downloads = downloads.clone();
+                let trust = Arc::clone(&trust);
+                let outgoing = signaling.outgoing.clone();
+                tokio::spawn(async move {
+                    if let Err(error) = accept_file_offer(
+                        &peer_connection,
+                        sdp,
+                        downloads,
+                        trust,
+                        &outgoing,
+                        local_id,
+                        from,
+                    )
+                    .await
+                    {
+                        tracing::warn!(%error, "remote file receive failed");
+                    }
+                });
+            }
+            _ => {}
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RemotePeer, SignalMessage};
+    use uuid::Uuid;
+
+    #[test]
+    fn endpoint_is_optional_for_existing_registrations() -> Result<(), serde_json::Error> {
+        let message = r#"{"type":"register","room":"room","peer":{"id":"00000000-0000-0000-0000-000000000000","name":"mac","fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;
+        let parsed: SignalMessage = serde_json::from_str(message)?;
+        assert!(matches!(parsed, SignalMessage::Register { .. }));
+        let SignalMessage::Register { peer, .. } = parsed else {
+            return Ok(());
+        };
+        assert!(peer.iroh_endpoint.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn endpoint_is_preserved_in_registration() -> Result<(), serde_json::Error> {
+        let peer = RemotePeer {
+            id: Uuid::nil(),
+            name: "mac".to_string(),
+            fingerprint: "a".repeat(64),
+            iroh_endpoint: Some("{\"id\":\"endpoint\"}".to_string()),
+        };
+        let json = serde_json::to_string(&SignalMessage::Register {
+            room: "room".to_string(),
+            peer,
+        })?;
+        assert!(json.contains("iroh_endpoint"));
+        Ok(())
+    }
 }
