@@ -2,7 +2,8 @@
 
 This is an optional, self-hosted WebSocket rendezvous service. It forwards
 small SDP messages between peers in the same room and never handles file
-contents. WebRTC then attempts a direct path using the configured ICE servers.
+contents. Clients can exchange WebRTC negotiation messages or iroh endpoint
+metadata through the room; file data remains peer-to-peer.
 
 Run it locally:
 
@@ -25,6 +26,7 @@ export WAFT_SIGNALING_ROOM='replace-with-a-long-random-secret'
 export WAFT_ICE_SERVERS='stun:stun.example.net:3478,turn:turn.example.net:3478'
 ```
 
-STUN is sufficient when NAT allows a direct UDP path. TURN is needed for
-networks that block or do not permit a direct path; it should be supplied as a
-credentialed URL and hosted separately from this signaling service.
+STUN is sufficient when WebRTC NAT traversal allows a direct UDP path. TURN is
+needed for networks that block or do not permit a direct WebRTC path; it should
+be supplied as a credentialed URL and hosted separately from this signaling
+service. iroh can use its direct or relay connectivity independently.

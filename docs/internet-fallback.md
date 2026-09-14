@@ -2,7 +2,8 @@
 
 waft is LAN-first. On the same network it uses UDP discovery and the existing
 authenticated TCP transfer, with no server dependency. Cross-network support
-is opt-in behind the `internet` Cargo feature.
+is opt-in behind the `internet` Cargo feature; the `iroh-internet` feature
+enables the preferred cross-network transport.
 
 The default rendezvous deployment uses Cloudflare Durable Objects. A small
 self-hosted Rust server is also included for users who want full control. The
@@ -11,10 +12,11 @@ internet path has three pieces:
 1. A WebSocket rendezvous service introduces peers in a shared room and forwards
    SDP negotiation messages or iroh endpoint metadata. The Cloudflare deployment
    is in `cloudflare/`.
-2. WebRTC performs ICE using `WAFT_ICE_SERVERS`, trying direct/STUN paths first
-   and TURN when configured.
-3. File data is sent over the authenticated WebRTC data channel or the iroh
-   QUIC connection; the rendezvous server is not a file relay.
+2. The daemon keeps LAN as the first route when local discovery finds the peer.
+3. iroh performs authenticated QUIC connectivity with direct and relay paths
+   for discovered cross-network peers.
+4. WebRTC performs ICE using `WAFT_ICE_SERVERS` as the compatibility fallback.
+   The rendezvous server never carries file bytes.
 
 Enable it with a feature build and configure:
 
@@ -43,12 +45,25 @@ built-in hosted deployment.
 
 ## Two-computer test
 
-Run the signaling binary on a reachable host, set the same room and signaling
-URL on both computers, then start the waft daemons. Confirm the two peers are
-visible before sending a small test file. For a first test, configure a STUN
-server that both networks can reach. If the ICE state cannot become connected
-through NAT, add a TURN server and repeat.
+On both computers, start the daemon with the same room:
+
+```sh
+cargo run --features iroh-internet --bin waft -- \
+  --signaling-room 'long-random-room-secret' daemon
+```
+
+Confirm the peer appears, then send a small file:
+
+```sh
+cargo run --features iroh-internet --bin waft -- list
+cargo run --features iroh-internet --bin waft -- \
+  send '<peer-name>' ./test.txt
+```
+
+Use separate networks to exercise iroh. Use the same Wi-Fi to exercise LAN;
+the daemon automatically prefers the local TCP address when available. A
+separate signaling host is only needed when overriding the built-in deployment.
 
 This fallback is deliberately optional: LAN traffic keeps the lower-latency
-path, and disabling the feature removes the WebRTC dependency from the normal
-binary.
+path, and disabling internet features removes cross-network dependencies from
+the normal binary.

@@ -298,6 +298,8 @@ This requires extracting the core waft logic (transfer, identity, trust, discove
 - [x] Feature-gated WebSocket signaling server with room isolation
 - [x] Feature-gated WebRTC peer connection with configurable STUN/TURN ICE servers
 - [x] Daemon remote peer lifecycle and WebRTC file receiver
+- [x] Authenticated iroh daemon transfers with LAN-first route selection
+- [x] Two-computer LAN and cross-network iroh transfer validation
 - [ ] End-to-end two-computer NAT/TURN test matrix
 
 - Signaling forwards negotiation only — file bytes remain direct P2P
