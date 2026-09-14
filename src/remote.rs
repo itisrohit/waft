@@ -36,6 +36,8 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
 const MAX_SIGNAL_MESSAGE_BYTES: usize = 256 * 1024;
 const MAX_IROH_ENDPOINT_BYTES: usize = 16 * 1024;
+/// Default rendezvous deployment for normal waft builds.
+pub const DEFAULT_SIGNALING_URL: &str = "wss://waft-signaling.nooks-license.workers.dev";
 
 /// Runtime settings for the optional internet path.
 #[derive(Debug, Clone)]
@@ -51,14 +53,18 @@ pub struct RemoteConfig {
 impl RemoteConfig {
     /// Loads settings from environment variables.
     pub fn from_env() -> Result<Option<Self>> {
-        let Some(signaling_url) = std::env::var_os("WAFT_SIGNALING_URL") else {
-            return Ok(None);
+        let room = match std::env::var("WAFT_SIGNALING_ROOM") {
+            Ok(room) => room,
+            Err(_) => return Ok(None),
         };
-        let signaling_url = signaling_url
-            .into_string()
-            .map_err(|_| anyhow!("WAFT_SIGNALING_URL is not valid UTF-8"))?;
-        let room = std::env::var("WAFT_SIGNALING_ROOM")
-            .context("WAFT_SIGNALING_ROOM is required when signaling is enabled")?;
+        let signaling_url = std::env::var_os("WAFT_SIGNALING_URL")
+            .map(|value| {
+                value
+                    .into_string()
+                    .map_err(|_| anyhow!("WAFT_SIGNALING_URL is not valid UTF-8"))
+            })
+            .transpose()?
+            .unwrap_or_else(|| DEFAULT_SIGNALING_URL.to_string());
         if room.is_empty() || room.len() > 128 {
             return Err(anyhow!("WAFT_SIGNALING_ROOM must be 1-128 characters"));
         }
