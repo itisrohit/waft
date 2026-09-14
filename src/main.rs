@@ -3,7 +3,11 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use waft::cli::run_client;
-use waft::daemon::{DaemonCommand, ipc_endpoint, start_daemon};
+#[cfg(not(feature = "internet"))]
+use waft::daemon::start_daemon;
+use waft::daemon::{DaemonCommand, ipc_endpoint};
+#[cfg(feature = "internet")]
+use waft::daemon::{DaemonOptions, start_daemon_with_options};
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use waft::startup;
 use waft::trust::TrustTier;
@@ -16,6 +20,15 @@ struct Cli {
     /// Custom path for the waft base directory (defaults to ~/.waft)
     #[arg(long, global = true)]
     dir: Option<PathBuf>,
+
+    /// Private rendezvous room used for remote peer discovery.
+    #[cfg(feature = "internet")]
+    #[arg(long, global = true)]
+    signaling_room: Option<String>,
+    /// Optional rendezvous URL override; waft's hosted URL is the default.
+    #[cfg(feature = "internet")]
+    #[arg(long, global = true)]
+    signaling_url: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -90,6 +103,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 );
             }
             init_logging();
+            #[cfg(feature = "internet")]
+            start_daemon_with_options(
+                &base_dir,
+                DaemonOptions {
+                    signaling_url: cli.signaling_url,
+                    signaling_room: cli.signaling_room,
+                },
+            )
+            .await?;
+            #[cfg(not(feature = "internet"))]
             start_daemon(&base_dir).await?;
         }
         Commands::Send { peer, file } => {

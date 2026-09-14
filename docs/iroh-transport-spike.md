@@ -8,13 +8,13 @@ endpoint address through the existing rendezvous connection. This removes the
 manual endpoint exchange for discovery experiments; it does not yet switch the
 daemon's file-send command to iroh.
 
-To enable that announcement on a daemon, configure the same rendezvous URL and
-room on both devices and build with the combined feature:
+To enable that announcement on a daemon, pass the same private room on both
+devices and build with the combined feature:
 
 ```sh
-export WAFT_SIGNALING_URL=wss://waft-signaling.example.net
-export WAFT_SIGNALING_ROOM='long-random-room-secret'
 cargo build --features iroh-internet
+cargo run --features iroh-internet --bin waft -- \
+  --signaling-room 'long-random-room-secret' daemon
 ```
 
 When both daemons are running, `waft list` includes discovered remote peers

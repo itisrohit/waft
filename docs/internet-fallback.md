@@ -29,6 +29,18 @@ public signaling endpoint cannot expose every connected peer to every other
 user. Use TLS (`wss://`) in production and restrict the signaling server at
 the reverse proxy if it is not intended for public access.
 
+For local testing, the room and optional URL can also be passed as daemon
+flags, avoiding shell environment setup:
+
+```sh
+cargo run --features iroh-internet --bin waft -- \
+  --signaling-room 'long-random-room-secret' \
+  daemon
+```
+
+Use `--signaling-url wss://your-worker.example.net` only when overriding the
+built-in hosted deployment.
+
 ## Two-computer test
 
 Run the signaling binary on a reachable host, set the same room and signaling
