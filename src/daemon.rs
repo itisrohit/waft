@@ -232,7 +232,7 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
         let pipe_name = ipc_endpoint(base_dir);
         let mut first_instance = true;
         loop {
-            let mut server = ServerOptions::new()
+            let server = ServerOptions::new()
                 .first_pipe_instance(first_instance)
                 .create(&pipe_name)
                 .with_context(|| format!("Failed to create named pipe at {pipe_name:?}"))?;
