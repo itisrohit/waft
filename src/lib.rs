@@ -16,7 +16,7 @@ pub mod error;
 pub mod identity;
 
 pub mod send;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod startup;
 pub mod transfer;
 pub mod trust;

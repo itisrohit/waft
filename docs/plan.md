@@ -212,7 +212,7 @@ waft/
 
 **Goal:** works on Linux, macOS, Windows with daemon autostart and OS integration.
 
-- [ ] Linux: `systemd` user service (`~/.config/systemd/user/waft.service`)
+- [x] Linux: `systemd` user service (`~/.config/systemd/user/waft.service`)
 - [x] macOS: `launchd` plist (`~/Library/LaunchAgents/dev.waft.plist`)
 - [ ] Windows: startup registry entry or Windows Service
 - [x] Windows: named-pipe daemon IPC parity with Unix clients

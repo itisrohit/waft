@@ -1,5 +1,95 @@
 //! Native login-start integration for supported desktop platforms.
 
+#[cfg(target_os = "linux")]
+mod linux {
+    use anyhow::{Context, Result, bail};
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    const SERVICE: &str = "waft.service";
+
+    pub fn install(base_dir: &Path) -> Result<()> {
+        let service_path = service_path()?;
+        let parent = service_path
+            .parent()
+            .context("systemd user directory has no parent")?;
+        std::fs::create_dir_all(parent).context("Failed to create systemd user directory")?;
+        let executable = std::env::current_exe().context("Failed to locate waft executable")?;
+        std::fs::write(&service_path, render_unit(&executable, base_dir))
+            .context("Failed to write systemd user service")?;
+        run_systemctl(["--user", "daemon-reload"])?;
+        run_systemctl(["--user", "enable", "--now", SERVICE])?;
+        println!("Installed and started {SERVICE} login service.");
+        Ok(())
+    }
+
+    pub fn uninstall() -> Result<()> {
+        let _ = Command::new("systemctl")
+            .args(["--user", "disable", "--now", SERVICE])
+            .status();
+        let service_path = service_path()?;
+        if service_path.exists() {
+            std::fs::remove_file(&service_path).context("Failed to remove systemd user service")?;
+        }
+        run_systemctl(["--user", "daemon-reload"])?;
+        println!("Removed {SERVICE} login service.");
+        Ok(())
+    }
+
+    fn service_path() -> Result<PathBuf> {
+        let home = std::env::var_os("HOME").context("HOME is not set")?;
+        Ok(PathBuf::from(home)
+            .join(".config")
+            .join("systemd")
+            .join("user")
+            .join(SERVICE))
+    }
+
+    fn run_systemctl<const N: usize>(args: [&str; N]) -> Result<()> {
+        let output = Command::new("systemctl")
+            .args(args)
+            .output()
+            .context("Failed to run systemctl")?;
+        if !output.status.success() {
+            bail!(
+                "systemctl failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(())
+    }
+
+    fn render_unit(executable: &Path, base_dir: &Path) -> String {
+        format!(
+            "[Unit]\nDescription=waft file transfer daemon\nAfter=network-online.target\n\n[Service]\nExecStart={} daemon --dir {}\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n",
+            escape_exec_arg(&executable.to_string_lossy()),
+            escape_exec_arg(&base_dir.to_string_lossy()),
+        )
+    }
+
+    fn escape_exec_arg(value: &str) -> String {
+        value
+            .replace('%', "%%")
+            .replace('\\', "\\\\")
+            .replace(' ', "\\x20")
+            .replace('\t', "\\x09")
+            .replace('\n', "\\x0a")
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::render_unit;
+        use std::path::Path;
+
+        #[test]
+        fn unit_contains_escaped_daemon_arguments() {
+            let unit = render_unit(Path::new("/opt/Wa ft/waft"), Path::new("/tmp/a%b"));
+            assert!(unit.contains("/opt/Wa\\x20ft/waft daemon --dir /tmp/a%%b"));
+            assert!(unit.contains("Restart=on-failure"));
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos {
     use anyhow::{Context, Result, bail};
@@ -137,3 +227,6 @@ mod macos {
 
 #[cfg(target_os = "macos")]
 pub use macos::{install, uninstall};
+
+#[cfg(target_os = "linux")]
+pub use linux::{install, uninstall};
