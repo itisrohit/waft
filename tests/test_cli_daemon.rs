@@ -35,20 +35,19 @@ async fn test_daemon_cli_ipc() -> Result<(), anyhow::Error> {
     #[cfg(windows)]
     {
         let mut retries = 20;
-        while tokio::net::windows::named_pipe::ClientOptions::new()
-            .open(&socket_path)
-            .is_err()
-            && retries > 0
-        {
+        let mut connected = false;
+        while retries > 0 {
+            if let Ok(client) =
+                tokio::net::windows::named_pipe::ClientOptions::new().open(&socket_path)
+            {
+                drop(client);
+                connected = true;
+                break;
+            }
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             retries -= 1;
         }
-        assert!(
-            tokio::net::windows::named_pipe::ClientOptions::new()
-                .open(&socket_path)
-                .is_ok(),
-            "Daemon did not start named pipe"
-        );
+        assert!(connected, "Daemon did not start named pipe");
     }
 
     // 1. Test List peers command
