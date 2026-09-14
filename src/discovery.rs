@@ -20,6 +20,8 @@ pub struct DiscoveryConfig {
     pub bind_ip: std::net::IpAddr,
     /// UDP multicast group address and port.
     pub multicast_addr: SocketAddr,
+    /// Optional IPv4 broadcast address used when multicast is unavailable.
+    pub broadcast_addr: Option<SocketAddr>,
     /// How frequently to broadcast the peer presence.
     pub announce_interval: Duration,
     /// Time period after which inactive peers are evicted.
@@ -31,6 +33,7 @@ impl Default for DiscoveryConfig {
         Self {
             bind_ip: std::net::IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             multicast_addr: SocketAddr::from(([239, 255, 77, 77], 7777)),
+            broadcast_addr: Some(SocketAddr::from(([255, 255, 255, 255], 7777))),
             announce_interval: Duration::from_secs(2),
             peer_timeout: Duration::from_secs(10),
         }
@@ -190,6 +193,9 @@ pub async fn start_announcer(
     let std_socket: std::net::UdpSocket = raw_socket.into();
     let socket = UdpSocket::from_std(std_socket)?;
     socket.set_multicast_loop_v4(true)?;
+    if config.broadcast_addr.is_some() {
+        socket.set_broadcast(true)?;
+    }
 
     let announcement = PeerAnnouncement {
         name,
@@ -205,6 +211,9 @@ pub async fn start_announcer(
         tokio::select! {
             _ = interval.tick() => {
                 let _ = socket.send_to(&payload, config.multicast_addr).await;
+                if let Some(broadcast_addr) = config.broadcast_addr {
+                    let _ = socket.send_to(&payload, broadcast_addr).await;
+                }
             }
             _ = shutdown_rx.changed() => {
                 if *shutdown_rx.borrow() {

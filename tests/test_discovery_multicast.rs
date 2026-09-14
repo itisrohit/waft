@@ -16,6 +16,7 @@ async fn multicast_smoke_discovers_peer() -> Result<(), anyhow::Error> {
     let config = DiscoveryConfig {
         bind_ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         multicast_addr,
+        broadcast_addr: None,
         announce_interval: Duration::from_millis(200),
         peer_timeout: Duration::from_secs(2),
     };
