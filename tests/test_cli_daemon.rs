@@ -1,8 +1,8 @@
-#![cfg(unix)]
+#![cfg(any(unix, windows))]
 
 use std::fs;
 use waft::cli::run_client;
-use waft::daemon::{DaemonCommand, start_daemon};
+use waft::daemon::{DaemonCommand, ipc_endpoint, start_daemon};
 use waft::trust::TrustTier;
 
 #[tokio::test]
@@ -11,7 +11,7 @@ async fn test_daemon_cli_ipc() -> Result<(), anyhow::Error> {
         .duration_since(std::time::SystemTime::UNIX_EPOCH)?
         .as_micros();
     let base_dir = std::env::temp_dir().join(format!("waft_test_daemon_{ts}"));
-    let socket_path = base_dir.join("daemon.sock");
+    let socket_path = ipc_endpoint(&base_dir);
 
     // Ensure directory is clean
     let _ = fs::remove_dir_all(&base_dir);
@@ -22,13 +22,34 @@ async fn test_daemon_cli_ipc() -> Result<(), anyhow::Error> {
         let _ = start_daemon(&base_dir_clone).await;
     });
 
-    // Wait for daemon to create socket and start listening
-    let mut retries = 20;
-    while !socket_path.exists() && retries > 0 {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        retries -= 1;
+    // Wait for the daemon endpoint to become available.
+    #[cfg(unix)]
+    {
+        let mut retries = 20;
+        while !socket_path.exists() && retries > 0 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            retries -= 1;
+        }
+        assert!(socket_path.exists(), "Daemon did not start Unix socket");
     }
-    assert!(socket_path.exists(), "Daemon did not start Unix socket");
+    #[cfg(windows)]
+    {
+        let mut retries = 20;
+        while tokio::net::windows::named_pipe::ClientOptions::new()
+            .open(&socket_path)
+            .is_err()
+            && retries > 0
+        {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            retries -= 1;
+        }
+        assert!(
+            tokio::net::windows::named_pipe::ClientOptions::new()
+                .open(&socket_path)
+                .is_ok(),
+            "Daemon did not start named pipe"
+        );
+    }
 
     // 1. Test List peers command
     let res = run_client(&socket_path, DaemonCommand::ListPeers).await;

@@ -215,6 +215,7 @@ waft/
 - [ ] Linux: `systemd` user service (`~/.config/systemd/user/waft.service`)
 - [ ] macOS: `launchd` plist (`~/Library/LaunchAgents/dev.waft.plist`)
 - [ ] Windows: startup registry entry or Windows Service
+- [x] Windows: named-pipe daemon IPC parity with Unix clients
 - [ ] Tray icon (`tray-icon` crate): peer list, right-click → send file
 - [ ] macOS Share Sheet: thin Swift wrapper calling `waft send`
 - [ ] Windows zero-copy via `TransmitFile` Win32 API

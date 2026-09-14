@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use waft::cli::run_client;
-use waft::daemon::{DaemonCommand, start_daemon};
+use waft::daemon::{DaemonCommand, ipc_endpoint, start_daemon};
 use waft::trust::TrustTier;
 
 #[derive(Parser)]
@@ -58,7 +58,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         PathBuf::from(home).join(".waft")
     });
-    let socket_path = base_dir.join("daemon.sock");
+    let socket_path = ipc_endpoint(&base_dir);
 
     match cli.command {
         Commands::Daemon => {
