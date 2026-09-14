@@ -37,7 +37,7 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 const MAX_SIGNAL_MESSAGE_BYTES: usize = 256 * 1024;
 const MAX_IROH_ENDPOINT_BYTES: usize = 16 * 1024;
 /// Default rendezvous deployment for normal waft builds.
-pub const DEFAULT_SIGNALING_URL: &str = "wss://waft-signaling.nooks-license.workers.dev";
+pub const DEFAULT_SIGNALING_URL: &str = "wss://waft-signaling.nooks-license.workers.dev/";
 
 /// Runtime settings for the optional internet path.
 #[derive(Debug, Clone)]
