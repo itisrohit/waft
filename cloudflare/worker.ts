@@ -1,9 +1,9 @@
 /** Cloudflare Durable Object signaling service for waft. */
 
-interface Peer { id: string; name: string; fingerprint: string; }
+interface Peer { id: string; name: string; fingerprint: string; iroh_endpoint?: string; }
 interface SignalMessage {
   type: string; room?: string; peer?: Peer; from?: string; to?: string;
-  sdp?: string; id?: string; message?: string;
+  sdp?: string; iroh_endpoint?: string; id?: string; message?: string;
 }
 
 const MAX_MESSAGE_BYTES = 256 * 1024;
@@ -71,7 +71,9 @@ export class WaftRoom {
 function validPeer(peer: Peer): boolean {
   return typeof peer.id === "string" && peer.id.length > 0
     && typeof peer.name === "string" && peer.name.length > 0 && peer.name.length <= 63
-    && typeof peer.fingerprint === "string" && /^[0-9a-f]{64}$/.test(peer.fingerprint);
+    && typeof peer.fingerprint === "string" && /^[0-9a-f]{64}$/.test(peer.fingerprint)
+    && (peer.iroh_endpoint === undefined
+      || (typeof peer.iroh_endpoint === "string" && peer.iroh_endpoint.length <= 16384));
 }
 
 function send(socket: WebSocket, message: SignalMessage): void {

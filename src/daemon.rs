@@ -11,6 +11,8 @@ use crate::discovery::{DiscoveryConfig, PeerMap, start_announcer, start_listener
 use crate::identity::Identity;
 #[cfg(all(feature = "internet", any(unix, windows)))]
 use crate::remote::RemoteConfig;
+#[cfg(all(feature = "internet", any(unix, windows)))]
+use crate::remote::RemotePeerRegistry;
 #[cfg(any(unix, windows))]
 use crate::transfer::start_receiver;
 #[cfg(any(unix, windows))]
@@ -144,6 +146,8 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
 
     // 4. Initialize PeerMap
     let peers = Arc::new(RwLock::new(PeerMap::new()));
+    #[cfg(feature = "internet")]
+    let remote_peers: RemotePeerRegistry = Arc::new(RwLock::new(std::collections::HashMap::new()));
 
     // 5. Start TCP receiver on port 7777
     let tcp_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 7777);
@@ -213,6 +217,7 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
         let remote_trust = Arc::clone(&trust_store);
         let remote_downloads = download_dir.clone();
         let remote_name = name.clone();
+        let remote_peers_for_task = Arc::clone(&remote_peers);
         tokio::spawn(async move {
             if let Err(error) = crate::remote::run_remote_receiver(
                 &remote_config,
@@ -220,6 +225,7 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
                 remote_name,
                 remote_downloads,
                 remote_trust,
+                remote_peers_for_task,
             )
             .await
             {
@@ -245,7 +251,14 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
 
         loop {
             match listener.accept().await {
-                Ok((stream, _)) => spawn_client_handler(stream, &peers, &trust_store, &identity),
+                Ok((stream, _)) => spawn_client_handler(
+                    stream,
+                    &peers,
+                    &trust_store,
+                    &identity,
+                    #[cfg(feature = "internet")]
+                    &remote_peers,
+                ),
                 Err(e) => error!(error = %e, "Failed to accept IPC connection"),
             }
         }
@@ -265,7 +278,14 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
                 .connect()
                 .await
                 .context("Failed to accept named pipe client")?;
-            spawn_client_handler(server, &peers, &trust_store, &identity);
+            spawn_client_handler(
+                server,
+                &peers,
+                &trust_store,
+                &identity,
+                #[cfg(feature = "internet")]
+                &remote_peers,
+            );
         }
     }
 }
@@ -276,14 +296,26 @@ fn spawn_client_handler<S>(
     peers: &Arc<RwLock<PeerMap>>,
     trust_store: &Arc<TrustStore>,
     identity: &Arc<Identity>,
+    #[cfg(feature = "internet")] remote_peers: &RemotePeerRegistry,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let peers_clone = Arc::clone(peers);
     let trust_clone = Arc::clone(trust_store);
     let identity_clone = Arc::clone(identity);
+    #[cfg(feature = "internet")]
+    let remote_peers_clone = Arc::clone(remote_peers);
     tokio::spawn(async move {
-        if let Err(e) = handle_client(stream, peers_clone, trust_clone, identity_clone).await {
+        if let Err(e) = handle_client(
+            stream,
+            peers_clone,
+            trust_clone,
+            identity_clone,
+            #[cfg(feature = "internet")]
+            remote_peers_clone,
+        )
+        .await
+        {
             warn!(error = %e, "Error handling IPC client connection");
         }
     });
@@ -296,6 +328,7 @@ async fn handle_client<S>(
     peers: Arc<RwLock<PeerMap>>,
     trust_store: Arc<TrustStore>,
     identity: Arc<Identity>,
+    #[cfg(feature = "internet")] remote_peers: RemotePeerRegistry,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
@@ -313,7 +346,7 @@ where
     match command {
         DaemonCommand::ListPeers => {
             let peer_list = peers.read().await.get_all();
-            let peer_infos = peer_list
+            let mut peer_infos: Vec<PeerInfo> = peer_list
                 .into_iter()
                 .map(|p| PeerInfo {
                     name: p.name,
@@ -321,6 +354,14 @@ where
                     addr: p.addr.to_string(),
                 })
                 .collect();
+            #[cfg(feature = "internet")]
+            peer_infos.extend(remote_peers.read().await.values().filter_map(|peer| {
+                peer.iroh_endpoint.as_ref().map(|endpoint| PeerInfo {
+                    name: peer.name.clone(),
+                    fingerprint: peer.fingerprint.clone(),
+                    addr: format!("iroh:{endpoint}"),
+                })
+            }));
             let resp = DaemonResponse::PeerList(peer_infos);
             let serialized = serde_json::to_string(&resp)?;
             writer

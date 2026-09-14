@@ -4,7 +4,7 @@
 //! public-key addressing, direct QUIC connectivity, and iroh relay fallback
 //! before we migrate the production daemon.
 
-#![cfg(feature = "iroh-spike")]
+#![cfg(any(feature = "iroh-spike", feature = "iroh-internet"))]
 
 use anyhow::{Context, Result, anyhow};
 use iroh::{Endpoint, EndpointAddr, endpoint::presets};
@@ -25,16 +25,27 @@ fn validate_file_name(name: &str) -> Result<()> {
 
 /// Starts an endpoint and prints its endpoint address for a second machine.
 pub async fn bind() -> Result<Endpoint> {
-    let endpoint = Endpoint::builder(presets::N0)
-        .alpns(vec![ALPN.to_vec()])
-        .bind()
-        .await?;
-    endpoint.online().await;
+    let endpoint = bind_endpoint().await?;
     println!(
         "WAFT_IROH_ENDPOINT={}",
         serde_json::to_string(&endpoint.addr())?
     );
     Ok(endpoint)
+}
+
+/// Starts an endpoint for daemon integrations without producing CLI output.
+pub async fn bind_endpoint() -> Result<Endpoint> {
+    let endpoint = Endpoint::builder(presets::N0)
+        .alpns(vec![ALPN.to_vec()])
+        .bind()
+        .await?;
+    endpoint.online().await;
+    Ok(endpoint)
+}
+
+/// Serializes an endpoint address for rendezvous announcements.
+pub fn endpoint_address_json(endpoint: &Endpoint) -> Result<String> {
+    Ok(serde_json::to_string(&endpoint.addr())?)
 }
 
 /// Sends a file using a bidirectional QUIC stream.

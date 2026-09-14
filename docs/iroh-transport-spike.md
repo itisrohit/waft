@@ -3,6 +3,24 @@
 This is an isolated experiment for cross-network file transfer. It does not
 replace the LAN daemon or the existing optional internet transport.
 
+With the `iroh-internet` feature, the daemon can also announce its iroh
+endpoint address through the existing rendezvous connection. This removes the
+manual endpoint exchange for discovery experiments; it does not yet switch the
+daemon's file-send command to iroh.
+
+To enable that announcement on a daemon, configure the same rendezvous URL and
+room on both devices and build with the combined feature:
+
+```sh
+export WAFT_SIGNALING_URL=wss://waft-signaling.example.net
+export WAFT_SIGNALING_ROOM='long-random-room-secret'
+cargo build --features iroh-internet
+```
+
+When both daemons are running, `waft list` includes discovered remote peers
+whose entries contain an `iroh:` address. WebRTC remains available through the
+existing `internet` feature.
+
 iroh gives each endpoint a public-key identity and uses QUIC connectivity
 attempts that can become direct when possible, with relay fallback when NATs
 prevent a direct path. The relay carries encrypted traffic but is not the
