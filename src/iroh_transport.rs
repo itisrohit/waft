@@ -235,6 +235,7 @@ async fn receive_authenticated_connection(
     tokio::fs::rename(temp, final_path).await?;
     tx.write_u8(1).await?;
     tx.finish()?;
+    connection.closed().await;
     Ok(())
 }
 
