@@ -4,6 +4,8 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use waft::cli::run_client;
 use waft::daemon::{DaemonCommand, ipc_endpoint, start_daemon};
+#[cfg(target_os = "macos")]
+use waft::startup;
 use waft::trust::TrustTier;
 
 #[derive(Parser)]
@@ -21,8 +23,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the waft daemon in the foreground
-    Daemon,
+    /// Manage the waft daemon
+    Daemon {
+        #[command(subcommand)]
+        action: Option<DaemonAction>,
+    },
     /// Send a file to a peer
     Send {
         /// The peer's name or public key fingerprint
@@ -40,6 +45,14 @@ enum Commands {
         #[arg(long)]
         set: Option<String>,
     },
+}
+
+#[derive(Subcommand)]
+enum DaemonAction {
+    /// Install and start the daemon at login
+    Install,
+    /// Remove the daemon login agent
+    Uninstall,
 }
 
 fn init_logging() {
@@ -61,7 +74,19 @@ async fn main() -> Result<(), anyhow::Error> {
     let socket_path = ipc_endpoint(&base_dir);
 
     match cli.command {
-        Commands::Daemon => {
+        Commands::Daemon { action } => {
+            #[cfg(target_os = "macos")]
+            if let Some(action) = action {
+                match action {
+                    DaemonAction::Install => startup::install(&base_dir)?,
+                    DaemonAction::Uninstall => startup::uninstall()?,
+                }
+                return Ok(());
+            }
+            #[cfg(not(target_os = "macos"))]
+            if action.is_some() {
+                anyhow::bail!("Daemon login management is currently supported on macOS only.");
+            }
             init_logging();
             start_daemon(&base_dir).await?;
         }

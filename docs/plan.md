@@ -213,7 +213,7 @@ waft/
 **Goal:** works on Linux, macOS, Windows with daemon autostart and OS integration.
 
 - [ ] Linux: `systemd` user service (`~/.config/systemd/user/waft.service`)
-- [ ] macOS: `launchd` plist (`~/Library/LaunchAgents/dev.waft.plist`)
+- [x] macOS: `launchd` plist (`~/Library/LaunchAgents/dev.waft.plist`)
 - [ ] Windows: startup registry entry or Windows Service
 - [x] Windows: named-pipe daemon IPC parity with Unix clients
 - [ ] Tray icon (`tray-icon` crate): peer list, right-click → send file
