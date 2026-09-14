@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use waft::cli::run_client;
 use waft::daemon::{DaemonCommand, ipc_endpoint, start_daemon};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use waft::startup;
 use waft::trust::TrustTier;
 
@@ -75,7 +75,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     match cli.command {
         Commands::Daemon { action } => {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
             if let Some(action) = action {
                 match action {
                     DaemonAction::Install => startup::install(&base_dir)?,
@@ -83,10 +83,10 @@ async fn main() -> Result<(), anyhow::Error> {
                 }
                 return Ok(());
             }
-            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+            #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
             if action.is_some() {
                 anyhow::bail!(
-                    "Daemon login management is currently supported on Linux and macOS only."
+                    "Daemon login management is currently supported on Linux, macOS, and Windows."
                 );
             }
             init_logging();

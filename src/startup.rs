@@ -230,3 +230,75 @@ pub use macos::{install, uninstall};
 
 #[cfg(target_os = "linux")]
 pub use linux::{install, uninstall};
+
+#[cfg(target_os = "windows")]
+mod windows {
+    use anyhow::{Context, Result, bail};
+    use std::path::Path;
+    use std::process::Command;
+
+    const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+    const VALUE_NAME: &str = "waft";
+
+    pub fn install(base_dir: &Path) -> Result<()> {
+        let executable = std::env::current_exe().context("Failed to locate waft executable")?;
+        let command_line = format!(
+            "{} daemon --dir {}",
+            quote_arg(&executable.to_string_lossy()),
+            quote_arg(&base_dir.to_string_lossy()),
+        );
+        run_reg([
+            "ADD",
+            RUN_KEY,
+            "/v",
+            VALUE_NAME,
+            "/t",
+            "REG_SZ",
+            "/d",
+            command_line.as_str(),
+            "/f",
+        ])?;
+        println!("Installed {VALUE_NAME} login startup entry.");
+        Ok(())
+    }
+
+    pub fn uninstall() -> Result<()> {
+        run_reg(["DELETE", RUN_KEY, "/v", VALUE_NAME, "/f"])?;
+        println!("Removed {VALUE_NAME} login startup entry.");
+        Ok(())
+    }
+
+    fn quote_arg(value: &str) -> String {
+        format!("\"{}\"", value.replace('"', "\\\""))
+    }
+
+    fn run_reg<const N: usize>(args: [&str; N]) -> Result<()> {
+        let output = Command::new("reg.exe")
+            .args(args)
+            .output()
+            .context("Failed to run reg.exe")?;
+        if !output.status.success() {
+            bail!(
+                "reg.exe failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::quote_arg;
+
+        #[test]
+        fn quotes_paths_for_startup_command() {
+            assert_eq!(
+                quote_arg(r"C:\Program Files\waft\waft.exe"),
+                r#""C:\Program Files\waft\waft.exe""#
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub use windows::{install, uninstall};
