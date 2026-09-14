@@ -4,18 +4,20 @@ use crate::daemon::DaemonCommand;
 use anyhow::Result;
 use std::path::Path;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::daemon::DaemonResponse;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use anyhow::Context;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::io::Write;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::time::Duration;
-#[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(any(unix, windows))]
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 #[cfg(unix)]
 use tokio::net::UnixStream;
+#[cfg(windows)]
+use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 
 const BOLD: &str = "\x1b[1m";
 const GREEN: &str = "\x1b[32m";
@@ -67,7 +69,7 @@ async fn connect_to_daemon(socket_path: &Path) -> Result<UnixStream> {
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 /// Spawns the daemon process detached.
 fn start_daemon_process() -> Result<()> {
     let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
@@ -81,11 +83,13 @@ fn start_daemon_process() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
-/// Runs the IPC client to send a command to the daemon and handle the response.
-pub async fn run_client(socket_path: &Path, command: DaemonCommand) -> Result<()> {
-    let mut stream = connect_to_daemon(socket_path).await?;
-    let (reader, mut writer) = stream.split();
+#[cfg(any(unix, windows))]
+/// Runs the IPC client over an established daemon stream.
+async fn run_client_stream<S>(stream: S, command: DaemonCommand) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let (reader, mut writer) = tokio::io::split(stream);
     let mut buf_reader = BufReader::new(reader);
 
     // Send command
@@ -182,7 +186,46 @@ pub async fn run_client(socket_path: &Path, command: DaemonCommand) -> Result<()
     Ok(())
 }
 
-#[cfg(not(unix))]
+#[cfg(unix)]
+/// Runs the IPC client to send a command to the daemon and handle the response.
+pub async fn run_client(socket_path: &Path, command: DaemonCommand) -> Result<()> {
+    let stream = connect_to_daemon(socket_path).await?;
+    run_client_stream(stream, command).await
+}
+
+#[cfg(windows)]
+/// Connects to the daemon named pipe, auto-starting the daemon if needed.
+async fn connect_to_daemon(pipe_path: &Path) -> Result<NamedPipeClient> {
+    let mut retries = 10;
+    let mut started = false;
+    loop {
+        match ClientOptions::new().open(pipe_path) {
+            Ok(client) => return Ok(client),
+            Err(error) => {
+                if !started {
+                    start_daemon_process()?;
+                    started = true;
+                }
+                if retries == 0 {
+                    return Err(error).context(format!(
+                        "Could not connect to daemon named pipe at {pipe_path:?}"
+                    ));
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                retries -= 1;
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+/// Runs the IPC client to send a command to the daemon and handle the response.
+pub async fn run_client(pipe_path: &Path, command: DaemonCommand) -> Result<()> {
+    let stream = connect_to_daemon(pipe_path).await?;
+    run_client_stream(stream, command).await
+}
+
+#[cfg(not(any(unix, windows)))]
 #[allow(clippy::unused_async)]
 pub async fn run_client(_socket_path: &Path, _command: DaemonCommand) -> Result<()> {
     anyhow::bail!("CLI client mode is not supported on this platform.");

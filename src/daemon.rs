@@ -5,30 +5,52 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::discovery::{DiscoveryConfig, PeerMap, start_announcer, start_listener};
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::identity::Identity;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::transfer::start_receiver;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::trust::TrustStore;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use anyhow::Context;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::path::PathBuf;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::sync::Arc;
-#[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(any(unix, windows))]
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+#[cfg(windows)]
+use tokio::net::windows::named_pipe::ServerOptions;
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use tokio::sync::RwLock;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use tracing::{error, info, warn};
+
+/// Returns the local IPC endpoint used by the daemon and CLI.
+#[must_use]
+pub fn ipc_endpoint(base_dir: &Path) -> PathBuf {
+    #[cfg(unix)]
+    {
+        base_dir.join("daemon.sock")
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = base_dir;
+        PathBuf::from(r"\\.\pipe\waft")
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        base_dir.join("daemon.sock")
+    }
+}
 
 /// Shared peer information structure for IPC.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,8 +115,8 @@ fn get_local_peer_name() -> String {
 /// 1. Loads/creates identity and trust store in `base_dir`.
 /// 2. Starts TCP file receiver.
 /// 3. Starts UDP discovery announcer & listener.
-/// 4. Listens on a Unix socket for CLI IPC.
-#[cfg(unix)]
+/// 4. Listens on a Unix socket or Windows named pipe for CLI IPC.
+#[cfg(any(unix, windows))]
 pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     info!(dir = ?base_dir, "Starting waft daemon");
 
@@ -121,7 +143,7 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     // 4. Initialize PeerMap
     let peers = Arc::new(RwLock::new(PeerMap::new()));
 
-    // 5. Start TCP and QUIC Receivers on port 7777
+    // 5. Start TCP receiver on port 7777
     let tcp_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 7777);
     let download_dir = std::env::var("HOME")
         .map_or_else(
@@ -183,51 +205,78 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     });
     info!("Discovery service started");
 
-    // 7. Setup Unix Socket IPC
-    let socket_path = base_dir.join("daemon.sock");
-    if socket_path.exists() {
-        // Test connection to verify if stale or active
-        if UnixStream::connect(&socket_path).await.is_ok() {
+    #[cfg(unix)]
+    {
+        let socket_path = ipc_endpoint(base_dir);
+        if socket_path.exists() && UnixStream::connect(&socket_path).await.is_ok() {
             anyhow::bail!("Another daemon instance is already running.");
         }
-        std::fs::remove_file(&socket_path).context("Failed to clean up stale socket file")?;
+        if socket_path.exists() {
+            std::fs::remove_file(&socket_path).context("Failed to clean up stale socket file")?;
+        }
+
+        let listener = UnixListener::bind(&socket_path)
+            .with_context(|| format!("Failed to bind Unix socket at {socket_path:?}"))?;
+        info!(socket = ?socket_path, "IPC Unix socket listener started");
+
+        loop {
+            match listener.accept().await {
+                Ok((stream, _)) => spawn_client_handler(stream, &peers, &trust_store, &identity),
+                Err(e) => error!(error = %e, "Failed to accept IPC connection"),
+            }
+        }
     }
 
-    let listener = UnixListener::bind(&socket_path)
-        .with_context(|| format!("Failed to bind Unix socket at {socket_path:?}"))?;
-    info!(socket = ?socket_path, "IPC Unix socket listener started");
-
-    // Loop to handle IPC connections
-    loop {
-        match listener.accept().await {
-            Ok((stream, _)) => {
-                let peers_clone = Arc::clone(&peers);
-                let trust_clone = Arc::clone(&trust_store);
-                let identity_clone = Arc::clone(&identity);
-                tokio::spawn(async move {
-                    if let Err(e) =
-                        handle_client(stream, peers_clone, trust_clone, identity_clone).await
-                    {
-                        warn!(error = %e, "Error handling client connection");
-                    }
-                });
-            }
-            Err(e) => {
-                error!(error = %e, "Failed to accept IPC connection");
-            }
+    #[cfg(windows)]
+    {
+        let pipe_name = ipc_endpoint(base_dir);
+        let mut first_instance = true;
+        loop {
+            let server = ServerOptions::new()
+                .first_pipe_instance(first_instance)
+                .create(&pipe_name)
+                .with_context(|| format!("Failed to create named pipe at {pipe_name:?}"))?;
+            first_instance = false;
+            server
+                .connect()
+                .await
+                .context("Failed to accept named pipe client")?;
+            spawn_client_handler(server, &peers, &trust_store, &identity);
         }
     }
 }
 
-#[cfg(unix)]
-/// Handles a single Unix socket client connection.
-async fn handle_client(
-    mut stream: UnixStream,
+#[cfg(any(unix, windows))]
+fn spawn_client_handler<S>(
+    stream: S,
+    peers: &Arc<RwLock<PeerMap>>,
+    trust_store: &Arc<TrustStore>,
+    identity: &Arc<Identity>,
+) where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let peers_clone = Arc::clone(peers);
+    let trust_clone = Arc::clone(trust_store);
+    let identity_clone = Arc::clone(identity);
+    tokio::spawn(async move {
+        if let Err(e) = handle_client(stream, peers_clone, trust_clone, identity_clone).await {
+            warn!(error = %e, "Error handling IPC client connection");
+        }
+    });
+}
+
+#[cfg(any(unix, windows))]
+/// Handles a single IPC client connection.
+async fn handle_client<S>(
+    stream: S,
     peers: Arc<RwLock<PeerMap>>,
     trust_store: Arc<TrustStore>,
     identity: Arc<Identity>,
-) -> Result<()> {
-    let (reader, mut writer) = stream.split();
+) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let (reader, mut writer) = tokio::io::split(stream);
     let mut buf_reader = BufReader::new(reader);
     let mut line = String::new();
 
@@ -368,7 +417,7 @@ async fn handle_client(
     Ok(())
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 #[allow(clippy::unused_async)]
 pub async fn start_daemon(_base_dir: &Path) -> Result<()> {
     anyhow::bail!("Daemon mode is not supported on this platform.");
