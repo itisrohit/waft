@@ -29,6 +29,7 @@ futures-util = { version = "0.3", optional = true }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"], optional = true }
 uuid = { version = "1.16", features = ["serde", "v4"], optional = true }
 webrtc = { version = "0.14", optional = true }
+iroh = { version = "1.2", optional = true }
 
 
 [target.'cfg(unix)'.dependencies]
@@ -41,6 +42,7 @@ criterion = "0.8"
 [features]
 default = []
 internet = ["base64", "bytes", "futures-util", "tokio-tungstenite", "uuid", "webrtc"]
+iroh-spike = ["iroh"]
 
 [[bench]]
 name = "bench_transfer"

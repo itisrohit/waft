@@ -4,6 +4,8 @@
 
 - Added an optional, feature-gated WebSocket signaling server and WebRTC ICE
   foundation for cross-network transfers. The LAN transport remains the default.
+- Added an isolated `iroh-spike` feature and `waft-iroh` CLI harness for testing
+  public-key addressed QUIC file streaming with direct-connect and relay fallback.
 
 All notable changes to this project will be documented in this file.
 

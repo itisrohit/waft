@@ -14,6 +14,8 @@ pub mod daemon;
 pub mod discovery;
 pub mod error;
 pub mod identity;
+#[cfg(feature = "iroh-spike")]
+pub mod iroh_transport;
 #[cfg(feature = "internet")]
 pub mod remote;
 
