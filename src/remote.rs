@@ -455,13 +455,6 @@ pub async fn send_file_over_signal(
     progress: Option<tokio::sync::mpsc::UnboundedSender<(u64, u64)>>,
 ) -> Result<()> {
     let local_id = Uuid::new_v4();
-    #[cfg(feature = "iroh-internet")]
-    let iroh_endpoint_handle = crate::iroh_transport::bind_endpoint().await?;
-    #[cfg(feature = "iroh-internet")]
-    let iroh_endpoint = Some(crate::iroh_transport::endpoint_address_json(
-        &iroh_endpoint_handle,
-    )?);
-    #[cfg(not(feature = "iroh-internet"))]
     let iroh_endpoint = None;
     let mut signaling = connect_signaling(
         config,
@@ -661,10 +654,9 @@ pub async fn run_remote_receiver(
     downloads: std::path::PathBuf,
     trust: Arc<crate::trust::TrustStore>,
     peers: RemotePeerRegistry,
+    #[cfg(feature = "iroh-internet")] iroh_endpoint_handle: crate::iroh_transport::SharedEndpoint,
 ) -> Result<()> {
     let local_id = Uuid::new_v4();
-    #[cfg(feature = "iroh-internet")]
-    let iroh_endpoint_handle = crate::iroh_transport::bind_endpoint().await?;
     #[cfg(feature = "iroh-internet")]
     let iroh_endpoint = Some(crate::iroh_transport::endpoint_address_json(
         &iroh_endpoint_handle,
