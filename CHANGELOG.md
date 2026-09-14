@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - IPv4 broadcast fallback for UDP peer discovery when multicast delivery is unavailable.
 - Windows named-pipe daemon IPC using the same JSON command/response protocol as Unix sockets.
 - macOS `launchd` install and uninstall commands for starting the daemon at login.
+- Linux `systemd --user` install and uninstall commands for starting the daemon at login.
 - Application-layer resumable file transfers (Atomic Offset Resumption) over TCP Zero-Copy to survive network drops.
 - Receiver-side atomic writing using `<BLAKE3_HASH>.part` temp files and post-transfer BLAKE3 integrity verification.
 - Handshake negotiation using resume ACK byte `0x03` and 8-byte big-endian `u64` offset representation.

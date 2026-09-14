@@ -19,7 +19,7 @@ cargo test --all-features
 cargo test --all-features --test test_discovery_multicast -- --ignored
 ```
 
-## macOS Login Autostart
+## Login Autostart
 
 Install the daemon as a per-user `launchd` agent:
 
@@ -32,6 +32,8 @@ Remove the agent with:
 ```bash
 waft daemon uninstall
 ```
+
+On Linux, the same commands manage a per-user `systemd` service.
 
 ## Code Quality & Lints
 
