@@ -1,7 +1,7 @@
 # waft — project plan
 
 > Cross-platform file transfer and clipboard sync daemon.
-> Faster than LocalSend. Zero friction. Native Rust binary. No server required.
+> Zero friction. Native Rust binary. No server required.
 
 ---
 
@@ -22,7 +22,7 @@ AirDrop feel on every OS. Run it once at boot, forget it exists, and files move 
 
 ## Target benchmarks
 
-| Scenario | LocalSend baseline | waft target |
+| Scenario | Existing LAN-tool baseline | waft target |
 |---|---|---|
 | Known peer, same LAN latency | ~800ms | < 80ms |
 | Unknown peer, same LAN | ~1200ms | < 300ms |
@@ -45,7 +45,7 @@ AirDrop feel on every OS. Run it once at boot, forget it exists, and files move 
 
 Ports:
   7777/TCP        # file transfer
-  7777/UDP        # multicast peer discovery
+  7777/UDP        # multicast + broadcast peer discovery fallback
 ```
 
 ### Trust tiers
