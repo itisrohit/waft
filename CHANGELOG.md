@@ -8,6 +8,8 @@
   public-key addressed QUIC file streaming with direct-connect and relay fallback.
 - Added optional iroh endpoint metadata to the existing internet rendezvous
   protocol, preserving WebRTC signaling and enabling automatic discovery experiments.
+- Made the deployed rendezvous URL the default, while retaining environment
+  overrides for self-hosted deployments and tests.
 
 All notable changes to this project will be documented in this file.
 

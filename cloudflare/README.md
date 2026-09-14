@@ -13,7 +13,8 @@ cd cloudflare
 wrangler deploy
 ```
 
-Configure the resulting Worker URL on clients:
+The resulting Worker URL is configured as waft's default rendezvous URL. For a
+custom deployment, override it on clients along with a private room:
 
 ```sh
 export WAFT_SIGNALING_URL=wss://waft-signaling.example.workers.dev
