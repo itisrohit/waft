@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added an optional, feature-gated WebSocket signaling server and WebRTC ICE
+  foundation for cross-network transfers. The LAN transport remains the default.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

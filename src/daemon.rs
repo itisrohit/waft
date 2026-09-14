@@ -9,6 +9,8 @@ use std::path::Path;
 use crate::discovery::{DiscoveryConfig, PeerMap, start_announcer, start_listener};
 #[cfg(any(unix, windows))]
 use crate::identity::Identity;
+#[cfg(all(feature = "internet", any(unix, windows)))]
+use crate::remote::RemoteConfig;
 #[cfg(any(unix, windows))]
 use crate::transfer::start_receiver;
 #[cfg(any(unix, windows))]
@@ -205,6 +207,28 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     });
     info!("Discovery service started");
 
+    #[cfg(feature = "internet")]
+    if let Some(remote_config) = RemoteConfig::from_env()? {
+        let remote_identity = Arc::clone(&identity);
+        let remote_trust = Arc::clone(&trust_store);
+        let remote_downloads = download_dir.clone();
+        let remote_name = name.clone();
+        tokio::spawn(async move {
+            if let Err(error) = crate::remote::run_remote_receiver(
+                &remote_config,
+                remote_identity,
+                remote_name,
+                remote_downloads,
+                remote_trust,
+            )
+            .await
+            {
+                error!(%error, "Remote signaling receiver stopped");
+            }
+        });
+        info!("Optional internet receiver started");
+    }
+
     #[cfg(unix)]
     {
         let socket_path = ipc_endpoint(base_dir);
@@ -368,11 +392,79 @@ where
                     }
                 }
             } else {
-                let resp = DaemonResponse::Error(format!("Peer '{peer}' not found"));
-                let serialized = serde_json::to_string(&resp)?;
-                writer
-                    .write_all(format!("{serialized}\n").as_bytes())
-                    .await?;
+                #[cfg(feature = "internet")]
+                if let Some(remote_config) = RemoteConfig::from_env()? {
+                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+                    let remote_identity = Arc::clone(&identity);
+                    let remote_name = get_local_peer_name();
+                    let path = PathBuf::from(file_path);
+                    let send_task = tokio::spawn(async move {
+                        crate::remote::send_file_over_signal(
+                            &remote_config,
+                            &remote_identity,
+                            remote_name,
+                            &peer,
+                            &path,
+                            Some(tx),
+                        )
+                        .await
+                    });
+                    while let Some((bytes_sent, total_bytes)) = rx.recv().await {
+                        let response = DaemonResponse::Progress {
+                            bytes_sent,
+                            total_bytes,
+                        };
+                        let serialized = serde_json::to_string(&response)?;
+                        if writer
+                            .write_all(format!("{serialized}\n").as_bytes())
+                            .await
+                            .is_err()
+                        {
+                            send_task.abort();
+                            return Ok(());
+                        }
+                    }
+                    match send_task.await {
+                        Ok(Ok(())) => {
+                            let response = DaemonResponse::Ok(
+                                "File sent successfully over the internet path".to_string(),
+                            );
+                            let serialized = serde_json::to_string(&response)?;
+                            writer
+                                .write_all(format!("{serialized}\n").as_bytes())
+                                .await?;
+                        }
+                        Ok(Err(error)) => {
+                            let response = DaemonResponse::Error(error.to_string());
+                            let serialized = serde_json::to_string(&response)?;
+                            writer
+                                .write_all(format!("{serialized}\n").as_bytes())
+                                .await?;
+                        }
+                        Err(error) => {
+                            let response =
+                                DaemonResponse::Error(format!("Remote send task failed: {error}"));
+                            let serialized = serde_json::to_string(&response)?;
+                            writer
+                                .write_all(format!("{serialized}\n").as_bytes())
+                                .await?;
+                        }
+                    }
+                } else {
+                    let resp = DaemonResponse::Error(format!("Peer '{peer}' not found"));
+                    let serialized = serde_json::to_string(&resp)?;
+                    writer
+                        .write_all(format!("{serialized}\n").as_bytes())
+                        .await?;
+                }
+                #[cfg(not(feature = "internet"))]
+                {
+                    let resp = DaemonResponse::Error(format!("Peer '{peer}' not found"));
+                    let serialized = serde_json::to_string(&resp)?;
+                    writer
+                        .write_all(format!("{serialized}\n").as_bytes())
+                        .await?;
+                }
             }
         }
         DaemonCommand::ListTrust => {
