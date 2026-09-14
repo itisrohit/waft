@@ -346,7 +346,7 @@ where
     match command {
         DaemonCommand::ListPeers => {
             let peer_list = peers.read().await.get_all();
-            let mut peer_infos: Vec<PeerInfo> = peer_list
+            let peer_infos: Vec<PeerInfo> = peer_list
                 .into_iter()
                 .map(|p| PeerInfo {
                     name: p.name,
@@ -354,6 +354,8 @@ where
                     addr: p.addr.to_string(),
                 })
                 .collect();
+            #[cfg(feature = "internet")]
+            let mut peer_infos = peer_infos;
             #[cfg(feature = "internet")]
             peer_infos.extend(remote_peers.read().await.values().filter_map(|peer| {
                 peer.iroh_endpoint.as_ref().map(|endpoint| PeerInfo {
