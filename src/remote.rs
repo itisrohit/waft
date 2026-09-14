@@ -53,17 +53,25 @@ pub struct RemoteConfig {
 impl RemoteConfig {
     /// Loads settings from environment variables.
     pub fn from_env() -> Result<Option<Self>> {
-        let room = match std::env::var("WAFT_SIGNALING_ROOM") {
-            Ok(room) => room,
-            Err(_) => return Ok(None),
+        Self::from_overrides(None, None)
+    }
+
+    /// Loads settings using command-line overrides before environment fallbacks.
+    pub fn from_overrides(
+        signaling_url_override: Option<&str>,
+        room_override: Option<&str>,
+    ) -> Result<Option<Self>> {
+        let room = room_override
+            .map(str::to_owned)
+            .or_else(|| std::env::var("WAFT_SIGNALING_ROOM").ok());
+        let Some(room) = room else {
+            return Ok(None);
         };
-        let signaling_url = std::env::var_os("WAFT_SIGNALING_URL")
-            .map(|value| {
-                value
-                    .into_string()
-                    .map_err(|_| anyhow!("WAFT_SIGNALING_URL is not valid UTF-8"))
+        let signaling_url = signaling_url_override
+            .map(str::to_owned)
+            .or_else(|| {
+                std::env::var_os("WAFT_SIGNALING_URL").and_then(|value| value.into_string().ok())
             })
-            .transpose()?
             .unwrap_or_else(|| DEFAULT_SIGNALING_URL.to_string());
         if room.is_empty() || room.len() > 128 {
             return Err(anyhow!("WAFT_SIGNALING_ROOM must be 1-128 characters"));
@@ -715,7 +723,7 @@ pub async fn run_remote_receiver(
 
 #[cfg(test)]
 mod tests {
-    use super::{RemotePeer, SignalMessage};
+    use super::{RemoteConfig, RemotePeer, SignalMessage};
     use uuid::Uuid;
 
     #[test]
@@ -743,6 +751,18 @@ mod tests {
             peer,
         })?;
         assert!(json.contains("iroh_endpoint"));
+        Ok(())
+    }
+
+    #[test]
+    fn command_line_overrides_supply_remote_configuration() -> anyhow::Result<()> {
+        let config = RemoteConfig::from_overrides(
+            Some("wss://override.example.test"),
+            Some("private-room"),
+        )?
+        .ok_or_else(|| anyhow::anyhow!("expected remote configuration"))?;
+        assert_eq!(config.signaling_url, "wss://override.example.test");
+        assert_eq!(config.room, "private-room");
         Ok(())
     }
 }

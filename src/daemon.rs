@@ -64,6 +64,13 @@ pub struct PeerInfo {
     pub addr: String,
 }
 
+/// Optional daemon-level overrides for remote rendezvous configuration.
+#[derive(Debug, Clone, Default)]
+pub struct DaemonOptions {
+    pub signaling_url: Option<String>,
+    pub signaling_room: Option<String>,
+}
+
 /// Commands sent from the CLI to the daemon.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DaemonCommand {
@@ -122,7 +129,21 @@ fn get_local_peer_name() -> String {
 /// 4. Listens on a Unix socket or Windows named pipe for CLI IPC.
 #[cfg(any(unix, windows))]
 pub async fn start_daemon(base_dir: &Path) -> Result<()> {
+    start_daemon_with_options(base_dir, DaemonOptions::default()).await
+}
+
+/// Starts the daemon with optional command-line configuration overrides.
+#[cfg(any(unix, windows))]
+pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) -> Result<()> {
     info!(dir = ?base_dir, "Starting waft daemon");
+
+    #[cfg(feature = "internet")]
+    let remote_config = Arc::new(RemoteConfig::from_overrides(
+        options.signaling_url.as_deref(),
+        options.signaling_room.as_deref(),
+    )?);
+    #[cfg(not(feature = "internet"))]
+    let _ = options;
 
     // 1. Create base directory
     std::fs::create_dir_all(base_dir)
@@ -212,7 +233,7 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
     info!("Discovery service started");
 
     #[cfg(feature = "internet")]
-    if let Some(remote_config) = RemoteConfig::from_env()? {
+    if let Some(remote_config) = remote_config.as_ref().clone() {
         let remote_identity = Arc::clone(&identity);
         let remote_trust = Arc::clone(&trust_store);
         let remote_downloads = download_dir.clone();
@@ -258,6 +279,8 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
                     &identity,
                     #[cfg(feature = "internet")]
                     &remote_peers,
+                    #[cfg(feature = "internet")]
+                    &remote_config,
                 ),
                 Err(e) => error!(error = %e, "Failed to accept IPC connection"),
             }
@@ -285,6 +308,8 @@ pub async fn start_daemon(base_dir: &Path) -> Result<()> {
                 &identity,
                 #[cfg(feature = "internet")]
                 &remote_peers,
+                #[cfg(feature = "internet")]
+                &remote_config,
             );
         }
     }
@@ -297,6 +322,7 @@ fn spawn_client_handler<S>(
     trust_store: &Arc<TrustStore>,
     identity: &Arc<Identity>,
     #[cfg(feature = "internet")] remote_peers: &RemotePeerRegistry,
+    #[cfg(feature = "internet")] remote_config: &Arc<Option<RemoteConfig>>,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -305,6 +331,8 @@ fn spawn_client_handler<S>(
     let identity_clone = Arc::clone(identity);
     #[cfg(feature = "internet")]
     let remote_peers_clone = Arc::clone(remote_peers);
+    #[cfg(feature = "internet")]
+    let remote_config_clone = Arc::clone(remote_config);
     tokio::spawn(async move {
         if let Err(e) = handle_client(
             stream,
@@ -313,6 +341,8 @@ fn spawn_client_handler<S>(
             identity_clone,
             #[cfg(feature = "internet")]
             remote_peers_clone,
+            #[cfg(feature = "internet")]
+            remote_config_clone.as_ref().clone(),
         )
         .await
         {
@@ -329,6 +359,7 @@ async fn handle_client<S>(
     trust_store: Arc<TrustStore>,
     identity: Arc<Identity>,
     #[cfg(feature = "internet")] remote_peers: RemotePeerRegistry,
+    #[cfg(feature = "internet")] remote_config: Option<RemoteConfig>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
@@ -436,7 +467,7 @@ where
                 }
             } else {
                 #[cfg(feature = "internet")]
-                if let Some(remote_config) = RemoteConfig::from_env()? {
+                if let Some(remote_config) = remote_config.clone() {
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                     let remote_identity = Arc::clone(&identity);
                     let remote_name = get_local_peer_name();
@@ -555,5 +586,11 @@ where
 #[cfg(not(any(unix, windows)))]
 #[allow(clippy::unused_async)]
 pub async fn start_daemon(_base_dir: &Path) -> Result<()> {
+    anyhow::bail!("Daemon mode is not supported on this platform.");
+}
+
+#[cfg(not(any(unix, windows)))]
+#[allow(clippy::unused_async)]
+pub async fn start_daemon_with_options(_base_dir: &Path, _options: DaemonOptions) -> Result<()> {
     anyhow::bail!("Daemon mode is not supported on this platform.");
 }
