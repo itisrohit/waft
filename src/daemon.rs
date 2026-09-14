@@ -9,6 +9,8 @@ use std::path::Path;
 use crate::discovery::{DiscoveryConfig, PeerMap, start_announcer, start_listener};
 #[cfg(any(unix, windows))]
 use crate::identity::Identity;
+#[cfg(all(feature = "iroh-internet", any(unix, windows)))]
+use crate::iroh_transport::SharedEndpoint;
 #[cfg(all(feature = "internet", any(unix, windows)))]
 use crate::remote::RemoteConfig;
 #[cfg(all(feature = "internet", any(unix, windows)))]
@@ -169,6 +171,8 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
     let peers = Arc::new(RwLock::new(PeerMap::new()));
     #[cfg(feature = "internet")]
     let remote_peers: RemotePeerRegistry = Arc::new(RwLock::new(std::collections::HashMap::new()));
+    #[cfg(feature = "iroh-internet")]
+    let iroh_endpoint: SharedEndpoint = Arc::new(crate::iroh_transport::bind_endpoint().await?);
 
     // 5. Start TCP receiver on port 7777
     let tcp_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 7777);
@@ -189,6 +193,25 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
         }
     });
     info!(port = 7777, downloads = ?download_dir, "TCP receiver started");
+
+    #[cfg(feature = "iroh-internet")]
+    {
+        let iroh_downloads = download_dir.clone();
+        let iroh_trust = Arc::clone(&trust_store);
+        let iroh_endpoint_for_task = Arc::clone(&iroh_endpoint);
+        tokio::spawn(async move {
+            if let Err(error) = crate::iroh_transport::receive_authenticated_loop(
+                iroh_endpoint_for_task,
+                iroh_downloads,
+                iroh_trust,
+            )
+            .await
+            {
+                error!(%error, "iroh receiver stopped");
+            }
+        });
+        info!("iroh receiver started");
+    }
 
     // 6. Start UDP Multicast Discovery
     let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -239,6 +262,8 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
         let remote_downloads = download_dir.clone();
         let remote_name = name.clone();
         let remote_peers_for_task = Arc::clone(&remote_peers);
+        #[cfg(feature = "iroh-internet")]
+        let remote_iroh_endpoint = Arc::clone(&iroh_endpoint);
         tokio::spawn(async move {
             if let Err(error) = crate::remote::run_remote_receiver(
                 &remote_config,
@@ -247,6 +272,8 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
                 remote_downloads,
                 remote_trust,
                 remote_peers_for_task,
+                #[cfg(feature = "iroh-internet")]
+                remote_iroh_endpoint,
             )
             .await
             {
@@ -281,6 +308,8 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
                     &remote_peers,
                     #[cfg(feature = "internet")]
                     &remote_config,
+                    #[cfg(feature = "iroh-internet")]
+                    &iroh_endpoint,
                 ),
                 Err(e) => error!(error = %e, "Failed to accept IPC connection"),
             }
@@ -310,6 +339,8 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
                 &remote_peers,
                 #[cfg(feature = "internet")]
                 &remote_config,
+                #[cfg(feature = "iroh-internet")]
+                &iroh_endpoint,
             );
         }
     }
@@ -323,6 +354,7 @@ fn spawn_client_handler<S>(
     identity: &Arc<Identity>,
     #[cfg(feature = "internet")] remote_peers: &RemotePeerRegistry,
     #[cfg(feature = "internet")] remote_config: &Arc<Option<RemoteConfig>>,
+    #[cfg(feature = "iroh-internet")] iroh_endpoint: &SharedEndpoint,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -333,6 +365,8 @@ fn spawn_client_handler<S>(
     let remote_peers_clone = Arc::clone(remote_peers);
     #[cfg(feature = "internet")]
     let remote_config_clone = Arc::clone(remote_config);
+    #[cfg(feature = "iroh-internet")]
+    let iroh_endpoint_clone = Arc::clone(iroh_endpoint);
     tokio::spawn(async move {
         if let Err(e) = handle_client(
             stream,
@@ -343,6 +377,8 @@ fn spawn_client_handler<S>(
             remote_peers_clone,
             #[cfg(feature = "internet")]
             remote_config_clone.as_ref().clone(),
+            #[cfg(feature = "iroh-internet")]
+            iroh_endpoint_clone,
         )
         .await
         {
@@ -360,6 +396,7 @@ async fn handle_client<S>(
     identity: Arc<Identity>,
     #[cfg(feature = "internet")] remote_peers: RemotePeerRegistry,
     #[cfg(feature = "internet")] remote_config: Option<RemoteConfig>,
+    #[cfg(feature = "iroh-internet")] iroh_endpoint: SharedEndpoint,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
@@ -468,6 +505,76 @@ where
             } else {
                 #[cfg(feature = "internet")]
                 if let Some(remote_config) = remote_config.clone() {
+                    #[cfg(feature = "iroh-internet")]
+                    if let Some(remote_peer) = remote_peers
+                        .read()
+                        .await
+                        .values()
+                        .find(|candidate| candidate.name == peer || candidate.fingerprint == peer)
+                        .cloned()
+                        && let Some(endpoint_json) = remote_peer.iroh_endpoint
+                    {
+                        let endpoint_addr: iroh::EndpointAddr =
+                            serde_json::from_str(&endpoint_json)
+                                .context("invalid remote iroh endpoint")?;
+                        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+                        let path = PathBuf::from(file_path);
+                        let send_identity = Arc::clone(&identity);
+                        let send_endpoint = Arc::clone(&iroh_endpoint);
+                        let send_task = tokio::spawn(async move {
+                            crate::iroh_transport::send_authenticated(
+                                &send_endpoint,
+                                endpoint_addr,
+                                &path,
+                                &send_identity,
+                                Some(tx),
+                            )
+                            .await
+                        });
+                        while let Some((bytes_sent, total_bytes)) = rx.recv().await {
+                            let response = DaemonResponse::Progress {
+                                bytes_sent,
+                                total_bytes,
+                            };
+                            let serialized = serde_json::to_string(&response)?;
+                            if writer
+                                .write_all(format!("{serialized}\n").as_bytes())
+                                .await
+                                .is_err()
+                            {
+                                send_task.abort();
+                                return Ok(());
+                            }
+                        }
+                        match send_task.await {
+                            Ok(Ok(())) => {
+                                let response = DaemonResponse::Ok(
+                                    "File sent successfully over iroh".to_string(),
+                                );
+                                let serialized = serde_json::to_string(&response)?;
+                                writer
+                                    .write_all(format!("{serialized}\n").as_bytes())
+                                    .await?;
+                            }
+                            Ok(Err(error)) => {
+                                let response = DaemonResponse::Error(error.to_string());
+                                let serialized = serde_json::to_string(&response)?;
+                                writer
+                                    .write_all(format!("{serialized}\n").as_bytes())
+                                    .await?;
+                            }
+                            Err(error) => {
+                                let response = DaemonResponse::Error(format!(
+                                    "iroh send task failed: {error}"
+                                ));
+                                let serialized = serde_json::to_string(&response)?;
+                                writer
+                                    .write_all(format!("{serialized}\n").as_bytes())
+                                    .await?;
+                            }
+                        }
+                        return Ok(());
+                    }
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                     let remote_identity = Arc::clone(&identity);
                     let remote_name = get_local_peer_name();

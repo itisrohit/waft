@@ -12,6 +12,9 @@
   overrides for self-hosted deployments and tests.
 - Added `--signaling-room` and optional `--signaling-url` daemon flags for
   remote rendezvous configuration without shell environment variables.
+- Added authenticated iroh daemon transfers with automatic peer selection:
+  LAN remains first choice, iroh handles discovered cross-network peers, and
+  the existing WebRTC path remains available as fallback.
 
 All notable changes to this project will be documented in this file.
 

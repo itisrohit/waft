@@ -1,12 +1,13 @@
-# iroh transport spike
+# iroh transport
 
-This is an isolated experiment for cross-network file transfer. It does not
-replace the LAN daemon or the existing optional internet transport.
+This covers the iroh transport and its daemon integration. It does not replace
+the LAN transport: when a peer is on the local network, the daemon continues
+to use the LAN path first.
 
 With the `iroh-internet` feature, the daemon can also announce its iroh
-endpoint address through the existing rendezvous connection. This removes the
-manual endpoint exchange for discovery experiments; it does not yet switch the
-daemon's file-send command to iroh.
+endpoint address through the existing rendezvous connection. This removes
+manual endpoint exchange and lets the daemon select iroh for peers discovered
+through the internet rendezvous.
 
 To enable that announcement on a daemon, pass the same private room on both
 devices and build with the combined feature:
@@ -18,8 +19,9 @@ cargo run --features iroh-internet --bin waft -- \
 ```
 
 When both daemons are running, `waft list` includes discovered remote peers
-whose entries contain an `iroh:` address. WebRTC remains available through the
-existing `internet` feature.
+whose entries contain an `iroh:` address. `waft send` uses LAN when available,
+then authenticated iroh QUIC for a peer with an iroh address, and retains the
+existing WebRTC path as fallback.
 
 iroh gives each endpoint a public-key identity and uses QUIC connectivity
 attempts that can become direct when possible, with relay fallback when NATs
@@ -28,7 +30,21 @@ application's file protocol. The spike uses one bidirectional QUIC stream and
 the existing file-name/size framing, so it does not add a blob store or a
 server-side file cache.
 
-## Two-computer smoke test
+## Two-computer daemon test
+
+On either computer, list peers and send a file by the displayed name:
+
+```sh
+cargo run --features iroh-internet --bin waft -- list
+cargo run --features iroh-internet --bin waft -- send '<peer-name>' ./test.txt
+```
+
+For an internet-path test, use two different networks, such as home Wi-Fi and
+a phone hotspot. For a LAN-path test, put both computers on the same Wi-Fi and
+confirm the peer has a local address in `waft list`; the daemon will prefer
+that route automatically.
+
+## Low-level harness smoke test
 
 Build and run the receiver on computer B:
 
@@ -53,11 +69,8 @@ No account or paid service is required for this smoke test.
 
 ## Scope and follow-up
 
-The command is intentionally a validation harness, not a production daemon
-integration. It currently accepts one incoming stream and does not yet connect
-waft's persisted identity, trust tiers, discovery UI, resume protocol, or
-automatic peer selection to iroh. Before making it the default internet path,
-we need a two-network test matrix, explicit receiver authorization, persisted
-endpoint identity, and a decision on relay operations. Public relays are
-appropriate for development/testing; production deployment should evaluate a
-dedicated relay or another operational policy.
+The low-level command remains a validation harness. The daemon path adds the
+persisted identity, trust store, atomic temporary files, and BLAKE3 verification,
+but does not yet provide resume support over iroh. Public relays are suitable
+for development/testing; production deployment should evaluate relay
+operations separately.
