@@ -46,6 +46,7 @@ AirDrop feel on every OS. Run it once at boot, forget it exists, and files move 
 Ports:
   7777/TCP        # file transfer
   7777/UDP        # multicast + broadcast peer discovery fallback
+  signaling      # optional WebSocket rendezvous; never carries file bytes
 ```
 
 ### Trust tiers
@@ -292,12 +293,14 @@ This requires extracting the core waft logic (transfer, identity, trust, discove
 
 ---
 
-### v0.7 — relay + cross-network (conditional)
+### v0.7 — optional cross-network fallback
 
-Only build if users explicitly request cross-network (non-LAN) transfers after v0.6.
+- [x] Feature-gated WebSocket signaling server with room isolation
+- [x] Feature-gated WebRTC peer connection with configurable STUN/TURN ICE servers
+- [x] Daemon remote peer lifecycle and WebRTC file receiver
+- [ ] End-to-end two-computer NAT/TURN test matrix
 
-- Minimal WebSocket hole-punch broker
-- Relay signals the connection only — file bytes remain direct P2P
+- Signaling forwards negotiation only — file bytes remain direct P2P
 - Self-hostable, no file bytes touch the relay server
 
 ---

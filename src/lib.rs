@@ -14,6 +14,8 @@ pub mod daemon;
 pub mod discovery;
 pub mod error;
 pub mod identity;
+#[cfg(feature = "internet")]
+pub mod remote;
 
 pub mod send;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
