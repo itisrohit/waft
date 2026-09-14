@@ -33,7 +33,7 @@ Remove the agent with:
 waft daemon uninstall
 ```
 
-On Linux, the same commands manage a per-user `systemd` service.
+On Linux, the same commands manage a per-user `systemd` service. On Windows, they manage a per-user startup registry entry.
 
 ## Code Quality & Lints
 
