@@ -53,6 +53,14 @@ pub struct DaemonStatus {
     pub detail: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct NearbyPeer {
+    pub name: String,
+    pub initials: String,
+    pub route: &'static str,
+    pub available: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct DaemonClient {
     endpoint: PathBuf,
@@ -126,6 +134,49 @@ impl DaemonClient {
             let _ = command;
             Err("waft daemon IPC is not supported on this platform".to_string())
         }
+    }
+
+    pub fn list_peers(&self) -> Result<Vec<PeerInfo>, String> {
+        match self.request(DaemonCommand::ListPeers)? {
+            DaemonResponse::PeerList(peers) => Ok(peers),
+            DaemonResponse::Error(error) => Err(error),
+            _ => Err("Daemon returned an unexpected peer response".to_string()),
+        }
+    }
+}
+
+pub fn nearby_peers() -> Result<Vec<NearbyPeer>, String> {
+    let client = DaemonClient::from_environment();
+    client.ensure_running()?;
+    client
+        .list_peers()
+        .map(|peers| peers.into_iter().map(to_nearby_peer).collect())
+}
+
+fn to_nearby_peer(peer: PeerInfo) -> NearbyPeer {
+    NearbyPeer {
+        initials: initials_for(&peer.name),
+        route: if peer.addr.starts_with("iroh:") {
+            "Internet"
+        } else {
+            "LAN"
+        },
+        name: peer.name,
+        available: true,
+    }
+}
+
+fn initials_for(name: &str) -> String {
+    let initials: String = name
+        .split_whitespace()
+        .filter_map(|part| part.chars().next())
+        .take(2)
+        .flat_map(char::to_uppercase)
+        .collect();
+    if initials.is_empty() {
+        "?".to_string()
+    } else {
+        initials
     }
 }
 

@@ -1,8 +1,8 @@
 # waft desktop shell
 
-This is the Step 3 Tauri 2 shell. It connects to the existing waft daemon and
+This is the Step 4 Tauri 2 shell. It connects to the existing waft daemon and
 starts it when needed. The popover includes the device header, receiving mode,
-nearby-peer states, and daemon status, but peer discovery and transfers are
+nearby peer cards, LAN/Internet route badges, and daemon status. Transfers are
 implemented in later steps.
 
 ## macOS development
@@ -27,5 +27,5 @@ Set `WAFT_DAEMON_PATH` when the `waft` executable is not on `PATH`:
 WAFT_DAEMON_PATH=/path/to/waft npm run tauri -- dev
 ```
 
-Step 3 is being validated on macOS first. Linux and Windows development and
+Step 4 is being validated on macOS first. Linux and Windows development and
 packaging paths will be completed in their planned later steps.

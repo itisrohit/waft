@@ -18,7 +18,7 @@
 
       <section class="device-panel" aria-labelledby="device-name">
         <div class="device-avatar" aria-hidden="true">N</div>
-        <div class="device-details"><p class="eyebrow">THIS DEVICE</p><h2 id="device-name">Nithin’s Mac</h2></div>
+        <div class="device-details"><p class="eyebrow">THIS DEVICE</p><h2 id="device-name">This device</h2></div>
         <label class="mode-control" for="receiving-mode"><span>Receiving</span>
           <select id="receiving-mode" name="receiving-mode">
             <option value="everyone">Everyone</option><option value="contacts">Contacts Only</option><option value="off">Receiving Off</option>
@@ -32,6 +32,7 @@
           <div class="state-icon" aria-hidden="true"><span></span></div>
           <div><h3 id="state-title">Connecting to waft</h3><p id="state-description">Checking the daemon for nearby peers…</p></div>
         </div>
+        <div id="peer-list" class="peer-list" aria-live="polite"></div>
         <button class="primary-button" type="button" disabled aria-disabled="true"><span aria-hidden="true">＋</span> Send a file</button>
       </section>
 

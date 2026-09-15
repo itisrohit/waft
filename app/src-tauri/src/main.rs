@@ -2,6 +2,7 @@
 
 mod daemon_client;
 
+use std::process::Command;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -12,6 +13,31 @@ const WINDOW_LABEL: &str = "main";
 #[tauri::command]
 fn daemon_status() -> Result<daemon_client::DaemonStatus, String> {
     daemon_client::DaemonClient::from_environment().ensure_running()
+}
+
+#[tauri::command]
+fn nearby_peers() -> Result<Vec<daemon_client::NearbyPeer>, String> {
+    daemon_client::nearby_peers()
+}
+
+#[tauri::command]
+fn device_name() -> String {
+    std::env::var("WAFT_PEER_NAME")
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+        .or_else(|| {
+            std::env::var("HOSTNAME")
+                .ok()
+                .filter(|name| !name.trim().is_empty())
+        })
+        .or_else(|| {
+            Command::new("hostname")
+                .output()
+                .ok()
+                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+                .filter(|name| !name.is_empty())
+        })
+        .unwrap_or_else(|| "This device".to_string())
 }
 
 fn tray_image() -> Image<'static> {
@@ -41,17 +67,39 @@ fn tray_image() -> Image<'static> {
 }
 
 fn toggle_window(window: &WebviewWindow) {
-    if window.is_visible().unwrap_or(false) {
-        let _ = window.hide();
+    let visible = window.is_visible().unwrap_or(false);
+    let focused = window.is_focused().unwrap_or(false);
+
+    // A visible but unfocused window may be behind another app. In that case,
+    // the tray click should raise it instead of hiding it first.
+    if visible && focused {
+        if let Err(error) = window.hide() {
+            eprintln!("waft: could not hide tray window: {error}");
+        }
     } else {
-        let _ = window.show();
-        let _ = window.set_focus();
+        show_window(window);
+    }
+}
+
+fn show_window(window: &WebviewWindow) {
+    if let Err(error) = window.unminimize() {
+        eprintln!("waft: could not restore tray window: {error}");
+    }
+    if let Err(error) = window.show() {
+        eprintln!("waft: could not show tray window: {error}");
+    }
+    if let Err(error) = window.set_focus() {
+        eprintln!("waft: could not focus tray window: {error}");
     }
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![daemon_status])
+        .invoke_handler(tauri::generate_handler![
+            daemon_status,
+            nearby_peers,
+            device_name
+        ])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Open waft", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
@@ -66,7 +114,7 @@ fn main() {
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => {
                         if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-                            toggle_window(&window);
+                            show_window(&window);
                         }
                     }
                     "quit" => app.exit(0),
