@@ -91,6 +91,20 @@ fn load_receiving_mode(base_dir: &Path) -> ReceivingMode {
         .map_or(ReceivingMode::Everyone, |settings| settings.receiving_mode)
 }
 
+/// Select the interface macOS is currently using for outbound LAN traffic.
+/// Joining multicast on an unspecified interface is unreliable when several
+/// adapters (VPN, hotspot, and Wi-Fi) are present.
+fn discovery_bind_ip() -> IpAddr {
+    std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
+        .ok()
+        .and_then(|socket| {
+            // UDP connect selects the route without sending application data.
+            socket.connect((Ipv4Addr::new(8, 8, 8, 8), 53)).ok()?;
+            Some(socket.local_addr().ok()?.ip())
+        })
+        .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+}
+
 /// Commands sent from the CLI to the daemon.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DaemonCommand {
@@ -256,7 +270,11 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
 
     // 6. Start UDP Multicast Discovery
     let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-    let discovery_config = DiscoveryConfig::default();
+    let discovery_config = DiscoveryConfig {
+        bind_ip: discovery_bind_ip(),
+        ..DiscoveryConfig::default()
+    };
+    info!(bind_ip = %discovery_config.bind_ip, "Discovery interface selected");
 
     // Spawn announcer
     let announcer_name = name.clone();

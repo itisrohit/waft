@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "waft",
-        "width": 380,
-        "height": 460,
+        "width": 360,
+        "height": 520,
         "minWidth": 320,
         "minHeight": 400,
         "resizable": false,

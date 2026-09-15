@@ -1,8 +1,8 @@
 :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202632; background: #f4f5f7; font-synthesis: none; text-rendering: optimizeLegibility; color-scheme: light dark; }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 340px; min-height: 100vh; background: transparent; }
+body { margin: 0; min-width: 340px; min-height: 100vh; overflow: hidden; background: transparent; }
 button, select { font: inherit; }
-.shell { display: flex; min-height: 100vh; flex-direction: column; gap: 22px; padding: 22px; background: #f4f5f7; }
+.shell { display: flex; min-height: 100vh; flex-direction: column; gap: 16px; padding: 16px; border: 1px solid #dfe3e9; border-radius: 14px; background: #f4f5f7; box-shadow: 0 12px 30px rgba(22, 28, 40, .18); }
 .topbar, .brand, .device-panel, .section-heading, footer { display: flex; align-items: center; }
 .topbar { justify-content: space-between; }
 .brand { gap: 10px; }
@@ -29,7 +29,7 @@ h3 { margin-bottom: 4px; font-size: 13px; }
 .settings-list dt { color: #77808e; }
 .settings-list dd { margin: 0; color: #202632; font-weight: 700; text-align: right; }
 .settings-note { margin: 0; color: #77808e; font-size: 11px; line-height: 1.45; }
-.content { display: flex; flex: 1; min-height: 250px; flex-direction: column; gap: 14px; }
+.content { display: flex; flex: 1; min-height: 250px; flex-direction: column; gap: 12px; }
 .incoming-section[hidden] { display: none; }
 .incoming-section { display: flex; flex-direction: column; gap: 9px; }
 .incoming-list { display: flex; flex-direction: column; gap: 8px; }
@@ -80,6 +80,7 @@ footer { gap: 7px; border-top: 1px solid #e1e4e9; padding-top: 14px; color: #687
   .icon-button, .device-panel { border-color: #393e49; background: #2b303a; color: #edf0f5; }
   .mode-control select { color: #edf0f5; }
   .settings-panel { border-color: #303642; background: #20242c; }
+  .shell { border-color: #393e49; box-shadow: 0 12px 30px rgba(0, 0, 0, .35); }
   .settings-list dd { color: #edf0f5; }
   .state-card, .peer-card, .incoming-card { border-color: #454b58; background: rgba(43,48,58,.55); }
   .peer-details p { color: #a4adbb; }

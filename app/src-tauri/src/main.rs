@@ -5,7 +5,7 @@ mod daemon_client;
 use std::process::Command;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WebviewWindow, WindowEvent};
 
 const WINDOW_LABEL: &str = "main";
@@ -86,21 +86,6 @@ fn tray_image() -> Image<'static> {
     Image::new_owned(rgba, SIDE as u32, SIDE as u32)
 }
 
-fn toggle_window(window: &WebviewWindow) {
-    let visible = window.is_visible().unwrap_or(false);
-    let focused = window.is_focused().unwrap_or(false);
-
-    // A visible but unfocused window may be behind another app. In that case,
-    // the tray click should raise it instead of hiding it first.
-    if visible && focused {
-        if let Err(error) = window.hide() {
-            eprintln!("waft: could not hide tray window: {error}");
-        }
-    } else {
-        show_window(window);
-    }
-}
-
 fn show_window(window: &WebviewWindow) {
     if let Err(error) = window.unminimize() {
         eprintln!("waft: could not restore tray window: {error}");
@@ -139,7 +124,9 @@ fn main() {
                 .icon(tray_image())
                 .tooltip("waft")
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                // Use the native menu-bar dropdown on the first click. The
+                // user can choose “Open waft” to enter the full window.
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => {
                         if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
@@ -148,17 +135,6 @@ fn main() {
                     }
                     "quit" => app.exit(0),
                     _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                        && let Some(window) = tray.app_handle().get_webview_window(WINDOW_LABEL)
-                    {
-                        toggle_window(&window);
-                    }
                 })
                 .build(app)?;
 
