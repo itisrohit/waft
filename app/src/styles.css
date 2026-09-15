@@ -1,0 +1,153 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #202632;
+  background: #f4f5f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 300px;
+  min-height: 100vh;
+  background: transparent;
+}
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  padding: 24px;
+  background: #f4f5f7;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: #202632;
+  color: #fff;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.eyebrow {
+  margin: 0 0 3px;
+  color: #77808e;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+h1 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: -0.03em;
+}
+
+.welcome {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 8px 34px;
+  text-align: center;
+}
+
+.status-mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  margin-bottom: 20px;
+  border: 1px solid #dfe3e9;
+  border-radius: 22px;
+  background: #fff;
+}
+
+.status-mark span {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #5578e8;
+  border-radius: 50%;
+  box-shadow: 0 0 0 6px #edf1ff;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.welcome p {
+  max-width: 270px;
+  margin: 0;
+  color: #6d7684;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-top: 1px solid #e1e4e9;
+  padding-top: 15px;
+  color: #687281;
+  font-size: 11px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3da879;
+}
+
+.step-label {
+  margin-left: auto;
+  color: #929aa6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  .shell {
+    color: #edf0f5;
+    background: #20232a;
+  }
+
+  .brand-mark {
+    background: #f0f2f6;
+    color: #202632;
+  }
+
+  .eyebrow,
+  .welcome p,
+  footer {
+    color: #a4adbb;
+  }
+
+  .status-mark {
+    border-color: #393e49;
+    background: #2b303a;
+  }
+
+  footer {
+    border-color: #393e49;
+  }
+}
