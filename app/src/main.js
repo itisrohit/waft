@@ -185,17 +185,28 @@ settingsButton.addEventListener('click', () => {
 
 sendButton.addEventListener('click', async () => {
   if (!selectedPeer) return;
-  const path = await open({ multiple: false, directory: false, title: 'Choose a file to send' });
+  let path;
+  try {
+    path = await open({ multiple: false, directory: false, title: 'Choose a file to send' });
+  } catch (error) {
+    statusText.textContent = `File picker failed: ${String(error)}`;
+    sendButton.textContent = 'File picker failed';
+    window.setTimeout(updateSendButton, 2500);
+    return;
+  }
   if (!path || Array.isArray(path)) return;
   sendButton.disabled = true;
+  sendButton.textContent = 'Sending…';
   statusText.textContent = `Sending to ${selectedPeer.name}…`;
   try {
     const result = await invoke('send_file', { peer: selectedPeer.name, filePath: path });
     statusText.textContent = result;
+    sendButton.textContent = '✓ Sent successfully';
   } catch (error) {
     statusText.textContent = `Send failed: ${String(error)}`;
+    sendButton.textContent = 'Send failed';
   } finally {
-    updateSendButton();
+    window.setTimeout(updateSendButton, 2500);
   }
 });
 
