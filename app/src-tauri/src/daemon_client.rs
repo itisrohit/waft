@@ -35,6 +35,13 @@ pub enum DaemonCommand {
     GetTrust {
         fingerprint: String,
     },
+    ListIncoming,
+    AcceptIncoming {
+        transfer_id: String,
+    },
+    RejectIncoming {
+        transfer_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +52,18 @@ pub enum DaemonResponse {
     TrustList(Vec<(String, TrustTier)>),
     TrustStatus(TrustTier),
     Progress { bytes_sent: u64, total_bytes: u64 },
+    IncomingList(Vec<IncomingTransfer>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncomingTransfer {
+    pub id: String,
+    pub sender_name: String,
+    pub fingerprint: String,
+    pub file_name: String,
+    pub file_size: u64,
+    pub bytes_received: u64,
+    pub state: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -141,6 +160,63 @@ impl DaemonClient {
             DaemonResponse::PeerList(peers) => Ok(peers),
             DaemonResponse::Error(error) => Err(error),
             _ => Err("Daemon returned an unexpected peer response".to_string()),
+        }
+    }
+
+    pub fn list_incoming(&self) -> Result<Vec<IncomingTransfer>, String> {
+        match self.request(DaemonCommand::ListIncoming)? {
+            DaemonResponse::IncomingList(transfers) => Ok(transfers),
+            DaemonResponse::Error(error) => Err(error),
+            _ => Err("Daemon returned an unexpected incoming-transfer response".to_string()),
+        }
+    }
+
+    pub fn decide_incoming(&self, transfer_id: String, accept: bool) -> Result<String, String> {
+        let command = if accept {
+            DaemonCommand::AcceptIncoming { transfer_id }
+        } else {
+            DaemonCommand::RejectIncoming { transfer_id }
+        };
+        match self.request(command)? {
+            DaemonResponse::Ok(message) => Ok(message),
+            DaemonResponse::Error(error) => Err(error),
+            _ => Err("Daemon returned an unexpected transfer decision response".to_string()),
+        }
+    }
+
+    pub fn send_file(&self, peer: String, file_path: String) -> Result<String, String> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::net::UnixStream;
+            let mut stream = UnixStream::connect(&self.endpoint)
+                .map_err(|error| format!("connect daemon: {error}"))?;
+            let command = serde_json::to_string(&DaemonCommand::SendFile { peer, file_path })
+                .map_err(|error| error.to_string())?;
+            writeln!(stream, "{command}").map_err(|error| error.to_string())?;
+            stream.flush().map_err(|error| error.to_string())?;
+            let mut reader = BufReader::new(stream);
+            loop {
+                let mut line = String::new();
+                reader
+                    .read_line(&mut line)
+                    .map_err(|error| error.to_string())?;
+                if line.is_empty() {
+                    return Err("daemon closed the send connection".to_string());
+                }
+                match serde_json::from_str::<DaemonResponse>(&line)
+                    .map_err(|error| format!("invalid daemon response: {error}"))?
+                {
+                    DaemonResponse::Ok(message) => return Ok(message),
+                    DaemonResponse::Error(error) => return Err(error),
+                    DaemonResponse::Progress { .. } => {}
+                    _ => return Err("daemon returned an unexpected send response".to_string()),
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (peer, file_path);
+            Err("sending is not supported on this platform yet".to_string())
         }
     }
 }

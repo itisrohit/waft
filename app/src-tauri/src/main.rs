@@ -21,6 +21,21 @@ fn nearby_peers() -> Result<Vec<daemon_client::NearbyPeer>, String> {
 }
 
 #[tauri::command]
+fn incoming_transfers() -> Result<Vec<daemon_client::IncomingTransfer>, String> {
+    daemon_client::DaemonClient::from_environment().list_incoming()
+}
+
+#[tauri::command]
+fn decide_incoming(transfer_id: String, accept: bool) -> Result<String, String> {
+    daemon_client::DaemonClient::from_environment().decide_incoming(transfer_id, accept)
+}
+
+#[tauri::command]
+fn send_file(peer: String, file_path: String) -> Result<String, String> {
+    daemon_client::DaemonClient::from_environment().send_file(peer, file_path)
+}
+
+#[tauri::command]
 fn device_name() -> String {
     std::env::var("WAFT_PEER_NAME")
         .ok()
@@ -95,10 +110,14 @@ fn show_window(window: &WebviewWindow) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             daemon_status,
             nearby_peers,
-            device_name
+            device_name,
+            incoming_transfers,
+            decide_incoming,
+            send_file
         ])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Open waft", true, None::<&str>)?;

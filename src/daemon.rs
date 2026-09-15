@@ -16,7 +16,7 @@ use crate::remote::RemoteConfig;
 #[cfg(all(feature = "internet", any(unix, windows)))]
 use crate::remote::RemotePeerRegistry;
 #[cfg(any(unix, windows))]
-use crate::transfer::start_receiver;
+use crate::transfer::{IncomingManager, IncomingTransfer, start_receiver_with_manager};
 #[cfg(any(unix, windows))]
 use crate::trust::TrustStore;
 #[cfg(any(unix, windows))]
@@ -89,6 +89,13 @@ pub enum DaemonCommand {
     GetTrust {
         fingerprint: String,
     },
+    ListIncoming,
+    AcceptIncoming {
+        transfer_id: String,
+    },
+    RejectIncoming {
+        transfer_id: String,
+    },
 }
 
 /// Responses sent from the daemon to the CLI.
@@ -100,6 +107,7 @@ pub enum DaemonResponse {
     TrustList(Vec<(String, TrustTier)>),
     TrustStatus(TrustTier),
     Progress { bytes_sent: u64, total_bytes: u64 },
+    IncomingList(Vec<IncomingTransfer>),
 }
 
 /// Resolves a friendly peer name to a local identifier.
@@ -187,8 +195,17 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
 
     let receiver_trust = Arc::clone(&trust_store);
     let receiver_downloads = download_dir.clone();
+    let incoming = IncomingManager::default();
+    let receiver_incoming = incoming.clone();
     tokio::spawn(async move {
-        if let Err(e) = start_receiver(tcp_addr, receiver_trust, receiver_downloads).await {
+        if let Err(e) = start_receiver_with_manager(
+            tcp_addr,
+            receiver_trust,
+            receiver_downloads,
+            receiver_incoming,
+        )
+        .await
+        {
             error!(error = %e, "TCP Receiver failed");
         }
     });
@@ -304,6 +321,7 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
                     &peers,
                     &trust_store,
                     &identity,
+                    &incoming,
                     #[cfg(feature = "internet")]
                     &remote_peers,
                     #[cfg(feature = "internet")]
@@ -335,6 +353,7 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
                 &peers,
                 &trust_store,
                 &identity,
+                &incoming,
                 #[cfg(feature = "internet")]
                 &remote_peers,
                 #[cfg(feature = "internet")]
@@ -347,11 +366,13 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
 }
 
 #[cfg(any(unix, windows))]
+#[allow(clippy::too_many_arguments)]
 fn spawn_client_handler<S>(
     stream: S,
     peers: &Arc<RwLock<PeerMap>>,
     trust_store: &Arc<TrustStore>,
     identity: &Arc<Identity>,
+    incoming: &IncomingManager,
     #[cfg(feature = "internet")] remote_peers: &RemotePeerRegistry,
     #[cfg(feature = "internet")] remote_config: &Arc<Option<RemoteConfig>>,
     #[cfg(feature = "iroh-internet")] iroh_endpoint: &SharedEndpoint,
@@ -361,6 +382,7 @@ fn spawn_client_handler<S>(
     let peers_clone = Arc::clone(peers);
     let trust_clone = Arc::clone(trust_store);
     let identity_clone = Arc::clone(identity);
+    let incoming_clone = incoming.clone();
     #[cfg(feature = "internet")]
     let remote_peers_clone = Arc::clone(remote_peers);
     #[cfg(feature = "internet")]
@@ -373,6 +395,7 @@ fn spawn_client_handler<S>(
             peers_clone,
             trust_clone,
             identity_clone,
+            incoming_clone,
             #[cfg(feature = "internet")]
             remote_peers_clone,
             #[cfg(feature = "internet")]
@@ -389,11 +412,13 @@ fn spawn_client_handler<S>(
 
 #[cfg(any(unix, windows))]
 /// Handles a single IPC client connection.
+#[allow(clippy::too_many_arguments)]
 async fn handle_client<S>(
     stream: S,
     peers: Arc<RwLock<PeerMap>>,
     trust_store: Arc<TrustStore>,
     identity: Arc<Identity>,
+    incoming: IncomingManager,
     #[cfg(feature = "internet")] remote_peers: RemotePeerRegistry,
     #[cfg(feature = "internet")] remote_config: Option<RemoteConfig>,
     #[cfg(feature = "iroh-internet")] iroh_endpoint: SharedEndpoint,
@@ -426,6 +451,9 @@ where
             let mut peer_infos = peer_infos;
             #[cfg(feature = "internet")]
             peer_infos.extend(remote_peers.read().await.values().filter_map(|peer| {
+                if peer.fingerprint == identity.fingerprint() {
+                    return None;
+                }
                 peer.iroh_endpoint.as_ref().map(|endpoint| PeerInfo {
                     name: peer.name.clone(),
                     fingerprint: peer.fingerprint.clone(),
@@ -680,6 +708,35 @@ where
             let tier = trust_store.get_tier(&fingerprint);
             let resp = DaemonResponse::TrustStatus(tier);
             let serialized = serde_json::to_string(&resp)?;
+            writer
+                .write_all(format!("{serialized}\n").as_bytes())
+                .await?;
+        }
+        DaemonCommand::ListIncoming => {
+            let resp = DaemonResponse::IncomingList(incoming.list().await);
+            let serialized = serde_json::to_string(&resp)?;
+            writer
+                .write_all(format!("{serialized}\n").as_bytes())
+                .await?;
+        }
+        DaemonCommand::AcceptIncoming { transfer_id } => {
+            let response = if incoming.decide(&transfer_id, true).await {
+                DaemonResponse::Ok("Incoming transfer accepted".to_string())
+            } else {
+                DaemonResponse::Error("Incoming transfer is no longer available".to_string())
+            };
+            let serialized = serde_json::to_string(&response)?;
+            writer
+                .write_all(format!("{serialized}\n").as_bytes())
+                .await?;
+        }
+        DaemonCommand::RejectIncoming { transfer_id } => {
+            let response = if incoming.decide(&transfer_id, false).await {
+                DaemonResponse::Ok("Incoming transfer rejected".to_string())
+            } else {
+                DaemonResponse::Error("Incoming transfer is no longer available".to_string())
+            };
+            let serialized = serde_json::to_string(&response)?;
             writer
                 .write_all(format!("{serialized}\n").as_bytes())
                 .await?;
