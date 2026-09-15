@@ -26,6 +26,19 @@
         </label>
       </section>
 
+      <section id="settings-panel" class="settings-panel" aria-labelledby="settings-title" hidden>
+        <div class="section-heading">
+          <div><p class="eyebrow">SETTINGS</p><h2 id="settings-title">Device settings</h2></div>
+          <button id="close-settings" class="text-button" type="button">Done</button>
+        </div>
+        <dl class="settings-list">
+          <div><dt>Device name</dt><dd id="settings-device-name">This device</dd></div>
+          <div><dt>Receiving mode</dt><dd id="settings-receiving-mode">Everyone</dd></div>
+          <div><dt>Save location</dt><dd>Downloads / waft</dd></div>
+        </dl>
+        <p class="settings-note">Device identity and file storage are managed by the waft daemon. Changes to receiving mode apply immediately.</p>
+      </section>
+
       <section class="content" aria-labelledby="nearby-title">
         <section id="incoming-section" class="incoming-section" aria-labelledby="incoming-title" hidden>
           <div class="section-heading"><div><p class="eyebrow">INCOMING</p><h2 id="incoming-title">Transfer request</h2></div></div>

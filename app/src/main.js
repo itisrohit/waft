@@ -15,6 +15,10 @@ const incomingSection = document.querySelector('#incoming-section');
 const incomingList = document.querySelector('#incoming-list');
 const sendButton = document.querySelector('#send-button');
 const receivingMode = document.querySelector('#receiving-mode');
+const settingsPanel = document.querySelector('#settings-panel');
+const closeSettings = document.querySelector('#close-settings');
+const settingsDeviceName = document.querySelector('#settings-device-name');
+const settingsReceivingMode = document.querySelector('#settings-receiving-mode');
 let selectedPeer = null;
 let hasInitialResult = false;
 let hasPeerSnapshot = false;
@@ -24,6 +28,7 @@ invoke('device_name')
   .then((name) => {
     deviceName.textContent = name;
     deviceAvatar.textContent = initialsFor(name);
+    settingsDeviceName.textContent = name;
   })
   .catch(() => { /* Keep the neutral fallback label. */ });
 
@@ -181,13 +186,20 @@ async function refreshPeers() {
 }
 
 settingsButton.addEventListener('click', () => {
-  statusText.textContent = 'Settings will be available in a later step';
+  settingsPanel.hidden = false;
+  settingsPanel.querySelector('button').focus();
+});
+
+closeSettings.addEventListener('click', () => {
+  settingsPanel.hidden = true;
+  settingsButton.focus();
 });
 
 receivingMode.addEventListener('change', async () => {
   const modes = { off: 'ReceivingOff', contacts: 'ContactsOnly', everyone: 'Everyone' };
   try {
     await invoke('set_receiving_mode', { mode: modes[receivingMode.value] });
+    settingsReceivingMode.textContent = receivingMode.options[receivingMode.selectedIndex].text;
     statusText.textContent = `Receiving mode: ${receivingMode.options[receivingMode.selectedIndex].text}`;
   } catch (error) {
     statusText.textContent = `Unable to change receiving mode: ${String(error)}`;
