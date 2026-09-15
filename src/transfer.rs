@@ -3,15 +3,153 @@
 use crate::error::WaftError;
 use crate::trust::{TrustStore, TrustTier};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{Mutex, oneshot};
 use tracing::{error, info, warn};
 
 const CHUNK_SIZE: usize = 2 * 1024 * 1024; // 2MB
 const READ_TIMEOUT_SECS: u64 = 10;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ReceivingMode {
+    ReceivingOff,
+    ContactsOnly,
+    Everyone,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncomingTransfer {
+    pub id: String,
+    pub sender_name: String,
+    pub fingerprint: String,
+    pub file_name: String,
+    pub file_size: u64,
+    pub bytes_received: u64,
+    pub state: String,
+}
+
+struct PendingTransfer {
+    info: IncomingTransfer,
+    decision: Option<oneshot::Sender<bool>>,
+}
+
+#[derive(Clone)]
+pub struct IncomingManager {
+    next_id: Arc<AtomicU64>,
+    transfers: Arc<Mutex<HashMap<String, PendingTransfer>>>,
+    mode: Arc<Mutex<ReceivingMode>>,
+    approval_required: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Default for IncomingManager {
+    fn default() -> Self {
+        Self {
+            next_id: Arc::new(AtomicU64::new(0)),
+            transfers: Arc::new(Mutex::new(HashMap::new())),
+            mode: Arc::new(Mutex::new(ReceivingMode::Everyone)),
+            approval_required: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+        }
+    }
+}
+
+impl IncomingManager {
+    pub async fn add_pending(&self, info: IncomingTransfer) -> oneshot::Receiver<bool> {
+        let (sender, receiver) = oneshot::channel();
+        self.transfers.lock().await.insert(
+            info.id.clone(),
+            PendingTransfer {
+                info,
+                decision: Some(sender),
+            },
+        );
+        receiver
+    }
+
+    pub async fn add_active(&self, info: IncomingTransfer) {
+        self.transfers.lock().await.insert(
+            info.id.clone(),
+            PendingTransfer {
+                info,
+                decision: None,
+            },
+        );
+    }
+
+    #[must_use]
+    pub fn next_id(&self) -> String {
+        format!(
+            "incoming-{}",
+            self.next_id.fetch_add(1, Ordering::Relaxed) + 1
+        )
+    }
+
+    pub async fn list(&self) -> Vec<IncomingTransfer> {
+        self.transfers
+            .lock()
+            .await
+            .values()
+            .map(|transfer| transfer.info.clone())
+            .collect()
+    }
+
+    pub async fn decide(&self, id: &str, accept: bool) -> bool {
+        let mut transfers = self.transfers.lock().await;
+        let Some(transfer) = transfers.get_mut(id) else {
+            return false;
+        };
+        if accept {
+            transfer.info.state = "receiving".to_string();
+            if let Some(sender) = transfer.decision.take() {
+                let _ = sender.send(true);
+            }
+        } else {
+            if let Some(sender) = transfer.decision.take() {
+                let _ = sender.send(false);
+            }
+            transfers.remove(id);
+        }
+        true
+    }
+
+    pub async fn progress(&self, id: &str, bytes_received: u64) {
+        if let Some(transfer) = self.transfers.lock().await.get_mut(id) {
+            transfer.info.bytes_received = bytes_received;
+        }
+    }
+
+    pub async fn finish(&self, id: &str) {
+        self.transfers.lock().await.remove(id);
+    }
+
+    pub async fn mode(&self) -> ReceivingMode {
+        *self.mode.lock().await
+    }
+
+    pub async fn set_mode(&self, mode: ReceivingMode) {
+        *self.mode.lock().await = mode;
+    }
+
+    #[must_use]
+    pub fn legacy() -> Self {
+        let manager = Self::default();
+        manager.approval_required.store(false, Ordering::Relaxed);
+        manager
+    }
+
+    #[must_use]
+    pub fn requires_approval(&self) -> bool {
+        self.approval_required.load(Ordering::Relaxed)
+    }
+}
 
 /// Helper to convert a 32-byte public key into a hex string fingerprint.
 pub(crate) fn fingerprint_from_bytes(public_key_bytes: &[u8; 32]) -> String {
@@ -74,6 +212,21 @@ pub async fn start_receiver(
     trust_store: Arc<TrustStore>,
     download_dir: PathBuf,
 ) -> Result<(), WaftError> {
+    start_receiver_with_manager(
+        bind_addr,
+        trust_store,
+        download_dir,
+        IncomingManager::legacy(),
+    )
+    .await
+}
+
+pub async fn start_receiver_with_manager(
+    bind_addr: SocketAddr,
+    trust_store: Arc<TrustStore>,
+    download_dir: PathBuf,
+    incoming: IncomingManager,
+) -> Result<(), WaftError> {
     let listener = TcpListener::bind(bind_addr).await?;
     info!(addr = %bind_addr, "TCP receiver started");
 
@@ -88,6 +241,7 @@ pub async fn start_receiver(
 
         let trust = Arc::clone(&trust_store);
         let downloads = download_dir.clone();
+        let incoming_state = incoming.clone();
 
         tokio::spawn(async move {
             let _ = socket.set_nodelay(true);
@@ -105,7 +259,9 @@ pub async fn start_receiver(
                     return;
                 }
             };
-            if let Err(e) = handle_connection(socket, peer_ip, trust, downloads).await {
+            if let Err(e) =
+                handle_connection(socket, peer_ip, trust, downloads, incoming_state).await
+            {
                 error!(peer = %peer_ip, error = %e, "Error handling transfer connection");
             }
         });
@@ -194,19 +350,12 @@ async fn read_and_verify_header(
 
     // Check fingerprint trust tier
     let fingerprint = fingerprint_from_bytes(&pubkey_bytes);
-    let mut tier = trust_store.get_tier(&fingerprint);
+    let tier = trust_store.get_tier(&fingerprint);
 
     if tier == TrustTier::Blocked {
         warn!(fingerprint = %fingerprint, "Connection rejected: peer is blocked");
         socket.write_all(&[0x00]).await?; // REJECT
         return Err(WaftError::Rejected);
-    }
-
-    // Auto-promote Ask to Trusted on first file acceptance
-    if tier == TrustTier::Ask {
-        info!(fingerprint = %fingerprint, "Promoting new peer to Trusted tier on first transfer");
-        trust_store.set_tier(&fingerprint, TrustTier::Trusted)?;
-        tier = TrustTier::Trusted;
     }
 
     Ok(TransferHeader {
@@ -297,10 +446,68 @@ async fn handle_connection(
     peer_ip: SocketAddr,
     trust_store: Arc<TrustStore>,
     download_dir: PathBuf,
+    incoming: IncomingManager,
 ) -> Result<(), WaftError> {
     info!(peer = %peer_ip, "Handling incoming file transfer connection");
 
-    let header = read_and_verify_header(&mut socket, &trust_store).await?;
+    // Explicitly half-close the connection when header parsing times out (or
+    // otherwise fails). Dropping a socket with unread inbound bytes can cause
+    // macOS to emit a TCP RST; an orderly shutdown gives callers the expected
+    // clean EOF instead.
+    let header = match read_and_verify_header(&mut socket, &trust_store).await {
+        Ok(header) => header,
+        Err(error) => {
+            let _ = socket.shutdown().await;
+            return Err(error);
+        }
+    };
+
+    let mode = incoming.mode().await;
+    if mode == ReceivingMode::ReceivingOff
+        || (mode == ReceivingMode::ContactsOnly && header.tier == TrustTier::Ask)
+    {
+        let _ = socket.write_all(&[0x00]).await;
+        return Err(WaftError::Rejected);
+    }
+
+    let transfer_id = incoming.next_id();
+    let transfer_info = IncomingTransfer {
+        id: transfer_id.clone(),
+        sender_name: "Unknown peer".to_string(),
+        fingerprint: header.fingerprint.clone(),
+        file_name: header.filename.to_string_lossy().to_string(),
+        file_size: header.file_size,
+        bytes_received: 0,
+        state: if header.tier == TrustTier::Ask {
+            "awaiting_approval"
+        } else {
+            "receiving"
+        }
+        .to_string(),
+    };
+    if header.tier == TrustTier::Ask && incoming.requires_approval() {
+        let decision = incoming.add_pending(transfer_info).await;
+        let accepted = tokio::time::timeout(std::time::Duration::from_secs(120), decision)
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or(false);
+        if !accepted {
+            let _ = socket.write_all(&[0x00]).await;
+            incoming.finish(&transfer_id).await;
+            return Err(WaftError::Rejected);
+        }
+    } else {
+        incoming.add_active(transfer_info).await;
+    }
+
+    // The public legacy receiver API historically auto-trusted a sender after
+    // accepting its first transfer. Keep that compatibility for integration
+    // tests and existing callers; the daemon-managed receiver requires an
+    // explicit UI approval and does not silently promote unknown peers.
+    if header.tier == TrustTier::Ask && !incoming.requires_approval() {
+        trust_store.set_tier(&header.fingerprint, TrustTier::Trusted)?;
+    }
 
     info!(
         filename = ?header.filename,
@@ -405,15 +612,18 @@ async fn handle_connection(
         {
             Ok(Ok(0)) => {
                 // Premature EOF - keep the partial file for future resume
+                incoming.finish(&transfer_id).await;
                 return Err(WaftError::Interrupted {
                     bytes_sent: header.file_size - remaining,
                 });
             }
             Ok(Ok(n)) => n,
             Ok(Err(e)) => {
+                incoming.finish(&transfer_id).await;
                 return Err(WaftError::Io(e));
             }
             Err(_) => {
+                incoming.finish(&transfer_id).await;
                 return Err(WaftError::Io(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     "Body read timed out",
@@ -423,6 +633,9 @@ async fn handle_connection(
 
         file.write_all(&buffer[..n]).await?;
         remaining -= n as u64;
+        incoming
+            .progress(&transfer_id, header.file_size - remaining)
+            .await;
     }
 
     // Ensure all data is fully flushed before hashing
@@ -451,6 +664,7 @@ async fn handle_connection(
         );
         let _ = tokio::fs::remove_file(&part_file_path).await;
         socket.write_all(&[0x00]).await?;
+        incoming.finish(&transfer_id).await;
         return Err(WaftError::HashMismatch {
             expected: hex::encode(header.expected_hash),
             actual: computed_hash.to_hex().to_string(),
@@ -462,6 +676,7 @@ async fn handle_connection(
 
     info!(filename = ?header.filename, "File received and verified successfully");
     socket.write_all(&[0x02]).await?; // Done/Success
+    incoming.finish(&transfer_id).await;
 
     Ok(())
 }

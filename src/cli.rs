@@ -180,6 +180,23 @@ where
                 );
                 let _ = std::io::stdout().flush();
             }
+            DaemonResponse::IncomingList(transfers) => {
+                for transfer in transfers {
+                    println!(
+                        " {} | {} | {}/{} bytes | {}",
+                        transfer.sender_name,
+                        transfer.file_name,
+                        transfer.bytes_received,
+                        transfer.file_size,
+                        transfer.state
+                    );
+                }
+                break;
+            }
+            DaemonResponse::ReceivingMode(mode) => {
+                println!("Receiving mode: {mode:?}");
+                break;
+            }
         }
     }
 

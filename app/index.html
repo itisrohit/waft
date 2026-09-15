@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f5f7" />
+    <title>waft</title>
+  </head>
+  <body>
+    <main class="shell" aria-labelledby="title">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">w</div>
+          <div><p class="eyebrow">NEARBY SHARING</p><h1 id="title">waft</h1></div>
+        </div>
+        <button class="icon-button" id="settings-button" type="button" aria-label="Open settings" title="Settings">⚙</button>
+      </header>
+
+      <section class="device-panel" aria-labelledby="device-name">
+        <div id="device-avatar" class="device-avatar" aria-hidden="true">?</div>
+        <div class="device-details"><p class="eyebrow">THIS DEVICE</p><h2 id="device-name">This device</h2></div>
+        <label class="mode-control" for="receiving-mode"><span>Receiving</span>
+          <select id="receiving-mode" name="receiving-mode">
+            <option value="everyone">Everyone</option><option value="contacts">Contacts Only</option><option value="off">Receiving Off</option>
+          </select>
+        </label>
+      </section>
+
+      <section id="settings-panel" class="settings-panel" aria-labelledby="settings-title" hidden>
+        <div class="section-heading">
+          <div><p class="eyebrow">SETTINGS</p><h2 id="settings-title">Device settings</h2></div>
+          <button id="close-settings" class="text-button" type="button">Done</button>
+        </div>
+        <dl class="settings-list">
+          <div><dt>Device name</dt><dd id="settings-device-name">This device</dd></div>
+          <div><dt>Receiving mode</dt><dd id="settings-receiving-mode">Everyone</dd></div>
+          <div><dt>Save location</dt><dd>Downloads / waft</dd></div>
+        </dl>
+        <p class="settings-note">Device identity and file storage are managed by the waft daemon. Changes to receiving mode apply immediately.</p>
+      </section>
+
+      <section class="content" aria-labelledby="nearby-title">
+        <section id="incoming-section" class="incoming-section" aria-labelledby="incoming-title" hidden>
+          <div class="section-heading"><div><p class="eyebrow">INCOMING</p><h2 id="incoming-title">Transfer request</h2></div></div>
+          <div id="incoming-list" class="incoming-list"></div>
+        </section>
+        <div class="section-heading"><div><p class="eyebrow">AVAILABLE NOW</p><h2 id="nearby-title">Nearby peers</h2></div><span class="route-hint">LAN first</span></div>
+        <div id="peer-state" class="state-card loading" role="status" aria-live="polite">
+          <div class="state-icon" aria-hidden="true"><span></span></div>
+          <div><h3 id="state-title">Connecting to waft</h3><p id="state-description">Checking the daemon for nearby peers…</p></div>
+        </div>
+        <div id="peer-list" class="peer-list" aria-live="polite"></div>
+        <button id="send-button" class="primary-button" type="button" disabled aria-disabled="true"><span aria-hidden="true">＋</span> Select a peer to send</button>
+      </section>
+
+      <footer><span class="status-dot" aria-hidden="true"></span><span id="daemon-status">Connecting to waft daemon…</span><span class="step-label">Step 3 · App shell</span></footer>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
