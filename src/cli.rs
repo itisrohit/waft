@@ -193,6 +193,10 @@ where
                 }
                 break;
             }
+            DaemonResponse::ReceivingMode(mode) => {
+                println!("Receiving mode: {mode:?}");
+                break;
+            }
         }
     }
 

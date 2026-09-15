@@ -16,7 +16,9 @@ use crate::remote::RemoteConfig;
 #[cfg(all(feature = "internet", any(unix, windows)))]
 use crate::remote::RemotePeerRegistry;
 #[cfg(any(unix, windows))]
-use crate::transfer::{IncomingManager, IncomingTransfer, start_receiver_with_manager};
+use crate::transfer::{
+    IncomingManager, IncomingTransfer, ReceivingMode, start_receiver_with_manager,
+};
 #[cfg(any(unix, windows))]
 use crate::trust::TrustStore;
 #[cfg(any(unix, windows))]
@@ -73,6 +75,22 @@ pub struct DaemonOptions {
     pub signaling_room: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedSettings {
+    receiving_mode: ReceivingMode,
+}
+
+fn settings_path(base_dir: &Path) -> PathBuf {
+    base_dir.join("settings.toml")
+}
+
+fn load_receiving_mode(base_dir: &Path) -> ReceivingMode {
+    std::fs::read_to_string(settings_path(base_dir))
+        .ok()
+        .and_then(|contents| toml::from_str::<PersistedSettings>(&contents).ok())
+        .map_or(ReceivingMode::Everyone, |settings| settings.receiving_mode)
+}
+
 /// Commands sent from the CLI to the daemon.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DaemonCommand {
@@ -96,6 +114,10 @@ pub enum DaemonCommand {
     RejectIncoming {
         transfer_id: String,
     },
+    GetReceivingMode,
+    SetReceivingMode {
+        mode: ReceivingMode,
+    },
 }
 
 /// Responses sent from the daemon to the CLI.
@@ -108,6 +130,7 @@ pub enum DaemonResponse {
     TrustStatus(TrustTier),
     Progress { bytes_sent: u64, total_bytes: u64 },
     IncomingList(Vec<IncomingTransfer>),
+    ReceivingMode(ReceivingMode),
 }
 
 /// Resolves a friendly peer name to a local identifier.
@@ -196,6 +219,7 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
     let receiver_trust = Arc::clone(&trust_store);
     let receiver_downloads = download_dir.clone();
     let incoming = IncomingManager::default();
+    incoming.set_mode(load_receiving_mode(base_dir)).await;
     let receiver_incoming = incoming.clone();
     tokio::spawn(async move {
         if let Err(e) = start_receiver_with_manager(
@@ -322,6 +346,7 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
                     &trust_store,
                     &identity,
                     &incoming,
+                    settings_path(base_dir),
                     #[cfg(feature = "internet")]
                     &remote_peers,
                     #[cfg(feature = "internet")]
@@ -354,6 +379,7 @@ pub async fn start_daemon_with_options(base_dir: &Path, options: DaemonOptions) 
                 &trust_store,
                 &identity,
                 &incoming,
+                settings_path(base_dir),
                 #[cfg(feature = "internet")]
                 &remote_peers,
                 #[cfg(feature = "internet")]
@@ -373,6 +399,7 @@ fn spawn_client_handler<S>(
     trust_store: &Arc<TrustStore>,
     identity: &Arc<Identity>,
     incoming: &IncomingManager,
+    settings_file: PathBuf,
     #[cfg(feature = "internet")] remote_peers: &RemotePeerRegistry,
     #[cfg(feature = "internet")] remote_config: &Arc<Option<RemoteConfig>>,
     #[cfg(feature = "iroh-internet")] iroh_endpoint: &SharedEndpoint,
@@ -396,6 +423,7 @@ fn spawn_client_handler<S>(
             trust_clone,
             identity_clone,
             incoming_clone,
+            settings_file,
             #[cfg(feature = "internet")]
             remote_peers_clone,
             #[cfg(feature = "internet")]
@@ -419,6 +447,7 @@ async fn handle_client<S>(
     trust_store: Arc<TrustStore>,
     identity: Arc<Identity>,
     incoming: IncomingManager,
+    settings_file: PathBuf,
     #[cfg(feature = "internet")] remote_peers: RemotePeerRegistry,
     #[cfg(feature = "internet")] remote_config: Option<RemoteConfig>,
     #[cfg(feature = "iroh-internet")] iroh_endpoint: SharedEndpoint,
@@ -735,6 +764,33 @@ where
                 DaemonResponse::Ok("Incoming transfer rejected".to_string())
             } else {
                 DaemonResponse::Error("Incoming transfer is no longer available".to_string())
+            };
+            let serialized = serde_json::to_string(&response)?;
+            writer
+                .write_all(format!("{serialized}\n").as_bytes())
+                .await?;
+        }
+        DaemonCommand::GetReceivingMode => {
+            let response = DaemonResponse::ReceivingMode(incoming.mode().await);
+            let serialized = serde_json::to_string(&response)?;
+            writer
+                .write_all(format!("{serialized}\n").as_bytes())
+                .await?;
+        }
+        DaemonCommand::SetReceivingMode { mode } => {
+            incoming.set_mode(mode).await;
+            let response = match tokio::fs::write(
+                &settings_file,
+                toml::to_string(&PersistedSettings {
+                    receiving_mode: incoming.mode().await,
+                })?,
+            )
+            .await
+            {
+                Ok(()) => DaemonResponse::Ok("Receiving mode updated".to_string()),
+                Err(error) => {
+                    DaemonResponse::Error(format!("could not save receiving mode: {error}"))
+                }
             };
             let serialized = serde_json::to_string(&response)?;
             writer

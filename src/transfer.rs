@@ -19,6 +19,13 @@ use tracing::{error, info, warn};
 const CHUNK_SIZE: usize = 2 * 1024 * 1024; // 2MB
 const READ_TIMEOUT_SECS: u64 = 10;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ReceivingMode {
+    ReceivingOff,
+    ContactsOnly,
+    Everyone,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IncomingTransfer {
     pub id: String,
@@ -35,10 +42,21 @@ struct PendingTransfer {
     decision: Option<oneshot::Sender<bool>>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct IncomingManager {
     next_id: Arc<AtomicU64>,
     transfers: Arc<Mutex<HashMap<String, PendingTransfer>>>,
+    mode: Arc<Mutex<ReceivingMode>>,
+}
+
+impl Default for IncomingManager {
+    fn default() -> Self {
+        Self {
+            next_id: Arc::new(AtomicU64::new(0)),
+            transfers: Arc::new(Mutex::new(HashMap::new())),
+            mode: Arc::new(Mutex::new(ReceivingMode::Everyone)),
+        }
+    }
 }
 
 impl IncomingManager {
@@ -108,6 +126,14 @@ impl IncomingManager {
 
     pub async fn finish(&self, id: &str) {
         self.transfers.lock().await.remove(id);
+    }
+
+    pub async fn mode(&self) -> ReceivingMode {
+        *self.mode.lock().await
+    }
+
+    pub async fn set_mode(&self, mode: ReceivingMode) {
+        *self.mode.lock().await = mode;
     }
 }
 
@@ -411,6 +437,14 @@ async fn handle_connection(
     info!(peer = %peer_ip, "Handling incoming file transfer connection");
 
     let header = read_and_verify_header(&mut socket, &trust_store).await?;
+
+    let mode = incoming.mode().await;
+    if mode == ReceivingMode::ReceivingOff
+        || (mode == ReceivingMode::ContactsOnly && header.tier == TrustTier::Ask)
+    {
+        let _ = socket.write_all(&[0x00]).await;
+        return Err(WaftError::Rejected);
+    }
 
     let transfer_id = incoming.next_id();
     let transfer_info = IncomingTransfer {

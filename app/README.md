@@ -1,9 +1,9 @@
 # waft desktop shell
 
-This is the Step 5 Tauri 2 shell. It connects to the existing waft daemon and
+This is the Step 7 Tauri 2 shell. It connects to the existing waft daemon and
 starts it when needed. The popover includes nearby peer cards, incoming
-transfer approval, LAN/Internet route badges, and daemon status. Sending and
-full receiving-mode settings are implemented in later steps.
+transfer approval, sending, and receiving-mode controls. Transfer history and
+full settings persistence are still being completed.
 
 ## macOS development
 

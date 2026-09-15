@@ -36,6 +36,11 @@ fn send_file(peer: String, file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn set_receiving_mode(mode: daemon_client::ReceivingMode) -> Result<String, String> {
+    daemon_client::DaemonClient::from_environment().set_receiving_mode(mode)
+}
+
+#[tauri::command]
 fn device_name() -> String {
     std::env::var("WAFT_PEER_NAME")
         .ok()
@@ -117,9 +122,14 @@ fn main() {
             device_name,
             incoming_transfers,
             decide_incoming,
-            send_file
+            send_file,
+            set_receiving_mode
         ])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.handle()
+                .set_activation_policy(tauri::ActivationPolicy::Accessory)?;
+
             let open = MenuItem::with_id(app, "open", "Open waft", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit waft", true, None::<&str>)?;

@@ -42,6 +42,10 @@ pub enum DaemonCommand {
     RejectIncoming {
         transfer_id: String,
     },
+    GetReceivingMode,
+    SetReceivingMode {
+        mode: ReceivingMode,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +57,14 @@ pub enum DaemonResponse {
     TrustStatus(TrustTier),
     Progress { bytes_sent: u64, total_bytes: u64 },
     IncomingList(Vec<IncomingTransfer>),
+    ReceivingMode(ReceivingMode),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ReceivingMode {
+    ReceivingOff,
+    ContactsOnly,
+    Everyone,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,6 +193,14 @@ impl DaemonClient {
             DaemonResponse::Ok(message) => Ok(message),
             DaemonResponse::Error(error) => Err(error),
             _ => Err("Daemon returned an unexpected transfer decision response".to_string()),
+        }
+    }
+
+    pub fn set_receiving_mode(&self, mode: ReceivingMode) -> Result<String, String> {
+        match self.request(DaemonCommand::SetReceivingMode { mode })? {
+            DaemonResponse::Ok(message) => Ok(message),
+            DaemonResponse::Error(error) => Err(error),
+            _ => Err("Daemon returned an unexpected receiving-mode response".to_string()),
         }
     }
 

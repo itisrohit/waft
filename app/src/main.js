@@ -14,6 +14,7 @@ const deviceAvatar = document.querySelector('#device-avatar');
 const incomingSection = document.querySelector('#incoming-section');
 const incomingList = document.querySelector('#incoming-list');
 const sendButton = document.querySelector('#send-button');
+const receivingMode = document.querySelector('#receiving-mode');
 let selectedPeer = null;
 let hasInitialResult = false;
 let hasPeerSnapshot = false;
@@ -181,6 +182,16 @@ async function refreshPeers() {
 
 settingsButton.addEventListener('click', () => {
   statusText.textContent = 'Settings will be available in a later step';
+});
+
+receivingMode.addEventListener('change', async () => {
+  const modes = { off: 'ReceivingOff', contacts: 'ContactsOnly', everyone: 'Everyone' };
+  try {
+    await invoke('set_receiving_mode', { mode: modes[receivingMode.value] });
+    statusText.textContent = `Receiving mode: ${receivingMode.options[receivingMode.selectedIndex].text}`;
+  } catch (error) {
+    statusText.textContent = `Unable to change receiving mode: ${String(error)}`;
+  }
 });
 
 sendButton.addEventListener('click', async () => {
