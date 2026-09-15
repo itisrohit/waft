@@ -450,7 +450,17 @@ async fn handle_connection(
 ) -> Result<(), WaftError> {
     info!(peer = %peer_ip, "Handling incoming file transfer connection");
 
-    let header = read_and_verify_header(&mut socket, &trust_store).await?;
+    // Explicitly half-close the connection when header parsing times out (or
+    // otherwise fails). Dropping a socket with unread inbound bytes can cause
+    // macOS to emit a TCP RST; an orderly shutdown gives callers the expected
+    // clean EOF instead.
+    let header = match read_and_verify_header(&mut socket, &trust_store).await {
+        Ok(header) => header,
+        Err(error) => {
+            let _ = socket.shutdown().await;
+            return Err(error);
+        }
+    };
 
     let mode = incoming.mode().await;
     if mode == ReceivingMode::ReceivingOff
