@@ -47,6 +47,7 @@ pub struct IncomingManager {
     next_id: Arc<AtomicU64>,
     transfers: Arc<Mutex<HashMap<String, PendingTransfer>>>,
     mode: Arc<Mutex<ReceivingMode>>,
+    approval_required: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for IncomingManager {
@@ -55,6 +56,7 @@ impl Default for IncomingManager {
             next_id: Arc::new(AtomicU64::new(0)),
             transfers: Arc::new(Mutex::new(HashMap::new())),
             mode: Arc::new(Mutex::new(ReceivingMode::Everyone)),
+            approval_required: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         }
     }
 }
@@ -135,6 +137,18 @@ impl IncomingManager {
     pub async fn set_mode(&self, mode: ReceivingMode) {
         *self.mode.lock().await = mode;
     }
+
+    #[must_use]
+    pub fn legacy() -> Self {
+        let manager = Self::default();
+        manager.approval_required.store(false, Ordering::Relaxed);
+        manager
+    }
+
+    #[must_use]
+    pub fn requires_approval(&self) -> bool {
+        self.approval_required.load(Ordering::Relaxed)
+    }
 }
 
 /// Helper to convert a 32-byte public key into a hex string fingerprint.
@@ -202,7 +216,7 @@ pub async fn start_receiver(
         bind_addr,
         trust_store,
         download_dir,
-        IncomingManager::default(),
+        IncomingManager::legacy(),
     )
     .await
 }
@@ -461,7 +475,7 @@ async fn handle_connection(
         }
         .to_string(),
     };
-    if header.tier == TrustTier::Ask {
+    if header.tier == TrustTier::Ask && incoming.requires_approval() {
         let decision = incoming.add_pending(transfer_info).await;
         let accepted = tokio::time::timeout(std::time::Duration::from_secs(120), decision)
             .await
@@ -475,6 +489,14 @@ async fn handle_connection(
         }
     } else {
         incoming.add_active(transfer_info).await;
+    }
+
+    // The public legacy receiver API historically auto-trusted a sender after
+    // accepting its first transfer. Keep that compatibility for integration
+    // tests and existing callers; the daemon-managed receiver requires an
+    // explicit UI approval and does not silently promote unknown peers.
+    if header.tier == TrustTier::Ask && !incoming.requires_approval() {
+        trust_store.set_tier(&header.fingerprint, TrustTier::Trusted)?;
     }
 
     info!(
