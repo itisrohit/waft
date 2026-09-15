@@ -1,153 +1,53 @@
-:root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #202632;
-  background: #f4f5f7;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  color-scheme: light dark;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-width: 300px;
-  min-height: 100vh;
-  background: transparent;
-}
-
-.shell {
-  display: flex;
-  min-height: 100vh;
-  flex-direction: column;
-  padding: 24px;
-  background: #f4f5f7;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.brand-mark {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 12px;
-  background: #202632;
-  color: #fff;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.eyebrow {
-  margin: 0 0 3px;
-  color: #77808e;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-h1 {
-  margin: 0;
-  font-size: 19px;
-  letter-spacing: -0.03em;
-}
-
-.welcome {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 8px 34px;
-  text-align: center;
-}
-
-.status-mark {
-  display: grid;
-  width: 64px;
-  height: 64px;
-  place-items: center;
-  margin-bottom: 20px;
-  border: 1px solid #dfe3e9;
-  border-radius: 22px;
-  background: #fff;
-}
-
-.status-mark span {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #5578e8;
-  border-radius: 50%;
-  box-shadow: 0 0 0 6px #edf1ff;
-}
-
-h2 {
-  margin: 0 0 8px;
-  font-size: 16px;
-  letter-spacing: -0.02em;
-}
-
-.welcome p {
-  max-width: 270px;
-  margin: 0;
-  color: #6d7684;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-footer {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border-top: 1px solid #e1e4e9;
-  padding-top: 15px;
-  color: #687281;
-  font-size: 11px;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #3da879;
-}
-
-.step-label {
-  margin-left: auto;
-  color: #929aa6;
-}
-
+:root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202632; background: #f4f5f7; font-synthesis: none; text-rendering: optimizeLegibility; color-scheme: light dark; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 340px; min-height: 100vh; background: transparent; }
+button, select { font: inherit; }
+.shell { display: flex; min-height: 100vh; flex-direction: column; gap: 22px; padding: 22px; background: #f4f5f7; }
+.topbar, .brand, .device-panel, .section-heading, footer { display: flex; align-items: center; }
+.topbar { justify-content: space-between; }
+.brand { gap: 10px; }
+.brand-mark, .device-avatar { display: grid; place-items: center; border-radius: 12px; font-weight: 700; }
+.brand-mark { width: 34px; height: 34px; background: #202632; color: #fff; font-size: 22px; }
+.eyebrow { margin: 0 0 3px; color: #77808e; font-size: 9px; font-weight: 700; letter-spacing: .12em; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { margin-bottom: 0; font-size: 18px; letter-spacing: -.03em; }
+h2 { margin-bottom: 0; font-size: 16px; letter-spacing: -.025em; }
+h3 { margin-bottom: 4px; font-size: 13px; }
+.icon-button { width: 31px; height: 31px; border: 1px solid #dfe3e9; border-radius: 9px; background: #fff; color: #687281; cursor: pointer; }
+.icon-button:hover, .icon-button:focus-visible { border-color: #5578e8; color: #5578e8; outline: none; }
+.device-panel { gap: 11px; padding: 13px; border: 1px solid #e1e4e9; border-radius: 15px; background: #fff; }
+.device-avatar { width: 37px; height: 37px; flex: 0 0 auto; background: #e9edff; color: #5578e8; }
+.device-details { min-width: 0; flex: 1; }
+.device-details h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mode-control { display: flex; flex-direction: column; gap: 4px; color: #77808e; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.mode-control select { max-width: 112px; border: 0; color: #202632; background: transparent; cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.mode-control select:focus-visible { outline: 2px solid #5578e8; outline-offset: 2px; border-radius: 3px; }
+.content { display: flex; flex: 1; min-height: 250px; flex-direction: column; gap: 14px; }
+.section-heading { justify-content: space-between; }
+.route-hint { padding: 4px 8px; border-radius: 20px; background: #e9f5ee; color: #38845e; font-size: 10px; font-weight: 700; }
+.state-card { display: flex; flex: 1; min-height: 150px; align-items: center; justify-content: center; gap: 13px; padding: 22px; border: 1px dashed #d7dce4; border-radius: 15px; background: rgba(255,255,255,.55); }
+.state-card > div:last-child { max-width: 210px; }
+.state-card p { margin-bottom: 0; color: #6d7684; font-size: 11px; line-height: 1.5; }
+.state-icon { display: grid; width: 35px; height: 35px; flex: 0 0 auto; place-items: center; border-radius: 12px; background: #edf1ff; }
+.state-icon span { width: 12px; height: 12px; border: 2px solid #5578e8; border-radius: 50%; }
+.loading .state-icon span { border-right-color: transparent; animation: spin 1s linear infinite; }
+.empty .state-icon { background: #e9f5ee; }
+.empty .state-icon span { border-color: #43a875; }
+.unavailable .state-icon { background: #fff2df; }
+.unavailable .state-icon span { border-color: #c98a30; }
+.primary-button { min-height: 38px; border: 0; border-radius: 10px; background: #dfe3e9; color: #8a929e; font-size: 12px; font-weight: 700; }
+footer { gap: 7px; border-top: 1px solid #e1e4e9; padding-top: 14px; color: #687281; font-size: 10px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #d69a3a; }
+.status-dot.connected { background: #3da879; }
+.step-label { margin-left: auto; color: #929aa6; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loading .state-icon span { animation: none; } }
 @media (prefers-color-scheme: dark) {
-  :root,
-  .shell {
-    color: #edf0f5;
-    background: #20232a;
-  }
-
-  .brand-mark {
-    background: #f0f2f6;
-    color: #202632;
-  }
-
-  .eyebrow,
-  .welcome p,
-  footer {
-    color: #a4adbb;
-  }
-
-  .status-mark {
-    border-color: #393e49;
-    background: #2b303a;
-  }
-
-  footer {
-    border-color: #393e49;
-  }
+  :root, .shell { color: #edf0f5; background: #20232a; }
+  .brand-mark { background: #f0f2f6; color: #202632; }
+  .eyebrow, .state-card p, footer { color: #a4adbb; }
+  .icon-button, .device-panel { border-color: #393e49; background: #2b303a; color: #edf0f5; }
+  .mode-control select { color: #edf0f5; }
+  .state-card { border-color: #454b58; background: rgba(43,48,58,.55); }
+  footer { border-color: #393e49; }
 }

@@ -1,7 +1,9 @@
 # waft desktop shell
 
-This is the Step 1 Tauri 2 shell. It is currently a placeholder and does not
-connect to the daemon or perform discovery or transfers.
+This is the Step 3 Tauri 2 shell. It connects to the existing waft daemon and
+starts it when needed. The popover includes the device header, receiving mode,
+nearby-peer states, and daemon status, but peer discovery and transfers are
+implemented in later steps.
 
 ## macOS development
 
@@ -11,12 +13,19 @@ WebKit development libraries available.
 ```sh
 cd app
 npm install
-npm run tauri dev
+npm run tauri -- dev
 ```
 
-The app opens a small placeholder window and adds a waft icon to the system
-tray/menu bar. Close the window to hide it; use the tray icon's Open waft action
-to show it again. Choose Quit waft from the tray menu to exit the app.
+The app opens a compact popover and adds a waft icon to the system tray/menu
+bar. Close the window to hide it; use the tray icon's Open waft action to show
+it again. Choose Quit waft from the tray menu to exit the app. The footer
+reports whether the existing daemon is connected.
 
-Step 1 is being validated on macOS first. Linux and Windows development and
+Set `WAFT_DAEMON_PATH` when the `waft` executable is not on `PATH`:
+
+```sh
+WAFT_DAEMON_PATH=/path/to/waft npm run tauri -- dev
+```
+
+Step 3 is being validated on macOS first. Linux and Windows development and
 packaging paths will be completed in their planned later steps.

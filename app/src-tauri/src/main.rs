@@ -1,11 +1,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod daemon_client;
+
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WebviewWindow, WindowEvent};
 
 const WINDOW_LABEL: &str = "main";
+
+#[tauri::command]
+fn daemon_status() -> Result<daemon_client::DaemonStatus, String> {
+    daemon_client::DaemonClient::from_environment().ensure_running()
+}
 
 fn tray_image() -> Image<'static> {
     const SIDE: usize = 24;
@@ -44,6 +51,7 @@ fn toggle_window(window: &WebviewWindow) {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![daemon_status])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Open waft", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
