@@ -26,7 +26,7 @@ memmap2 = "0.9"
 base64 = { version = "0.22", optional = true }
 bytes = { version = "1.10", optional = true }
 futures-util = { version = "0.3", optional = true }
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"], optional = true }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"], optional = true }
 uuid = { version = "1.16", features = ["serde", "v4"], optional = true }
 webrtc = { version = "0.14", optional = true }
 iroh = { version = "1.2", optional = true }
